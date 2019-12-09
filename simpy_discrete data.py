@@ -27,6 +27,7 @@ class Concert:
 
     def __init__(self, env, data):
         self.env = env
+        # init process data 
         self.bus_source_times = data['bus_source_times']
         self.agent_source_times = data['agent_source_times']
         self.agent_sink_times = data['agent_sink_times']
@@ -34,12 +35,13 @@ class Concert:
         self.bus_depart = []
         self.available_time = []
         self.results = []
-        self.queue = simpy.Resource(self.env, capacity=QUEUES)
-        self.bus_available = self.env.event()
-        self.env.process(self.monitor_any_bus_available())
-        self.env.process(self.monitor_bus_depart())
-        self.bus_source()
-        self.agents_source()
+
+        self.queue = simpy.Resource(self.env, capacity=QUEUES) # create waiting queue
+        self.bus_available = self.env.event() # event for available bus
+        self.env.process(self.monitor_any_bus_available()) # monitor if any bus available
+        self.env.process(self.monitor_bus_depart()) # monitor if the bus has departed
+        self.bus_source() # start bus source
+        self.agents_source() # start agents source 
 
     def monitor_bus_depart(self):
         while True:
@@ -110,9 +112,9 @@ class Concert:
         print('Agent %d on bus %d at %d' % (agent_id, bus_id, self.env.now))
         # print('Bus %d count: %d' % (bus_id, self.buses[bus_id].count))
 
-        # check is bus departed
-        yield self.bus_depart[bus_id]
-        yield self.env.timeout(TRAVEL_TIME)  # travel
+        
+        yield self.bus_depart[bus_id] # check is bus departed
+        yield self.env.timeout(TRAVEL_TIME)  # travel to destination
 
         sink_time = self.agent_sink_times[agent_id]
         simu_time = self.env.now - source_time
@@ -131,7 +133,6 @@ class Concert:
 env = simpy.Environment()
 concert = Concert(env, data)
 env.run(until=100)
-
 
 # %%
 r = concert.results

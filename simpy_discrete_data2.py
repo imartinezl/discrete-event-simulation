@@ -31,10 +31,12 @@ class Bus():
         self.env = env
         self.ts_source = ts_source
 
-        self.print = False # control print statemets
+        self.print = True # control print statemets
         self.bus_is_full = False
         self.driver_out_patience = False
+
         self.departed_event = self.env.event() # init departed event
+        self.reached_event = self.env.event() # init departed event
         self.res = None # init but resource
 
         self.env.process(self.process())
@@ -45,6 +47,15 @@ class Bus():
 
         self.res = simpy.Resource(self.env, capacity=BUS_CAPACITY) # create bus resource
         self.available_time = self.env.now # save available time
+
+        yield self.departed_event
+        if self.print: print('Bus %d departed at %.2f' % (self.bus_id, self.env.now))
+
+        # travel_time = np.random.normal(TRAVEL_TIME, 1)
+        yield self.env.timeout(TRAVEL_TIME)  # travel to destination
+        self.reached_event.succeed()
+        self.ts_destination = self.env.now
+        if self.print: print('Bus %d reached destination at %.2f' % (self.bus_id, self.ts_destination))
 
     def available(self):
         if self.res:
@@ -68,11 +79,13 @@ class Bus():
                 self.ts_departed = self.env.now
                 if self.print: print('Bus %d leaving at time %.2f' % (self.bus_id, self.ts_departed))
 
+
     def results(self):
         return {
             'bus_id': self.bus_id,
             'ts_source': self.ts_source,
             'ts_departed': self.ts_departed,
+            'ts_destination': self.ts_destination,
             'bus_is_full': self.bus_is_full,
             'driver_out_patience': self.driver_out_patience,
         }
@@ -123,9 +136,9 @@ class Agent:
         self.ts_bus_departed = self.env.now
 
     def travel(self):
-        travel_time = np.random.normal(TRAVEL_TIME, 1)
-        yield self.env.timeout(travel_time)  # travel to destination
+        yield self.bus.reached_event
         self.ts_destination = self.env.now
+        self.bus.ts_destination = self.ts_destination
 
     def finish(self):
         self.ts_simulation = self.ts_destination - self.ts_source
@@ -135,6 +148,7 @@ class Agent:
     def results(self):
         return {
             'agent_id': self.agent_id,
+            'bus_id': self.bus.bus_id,
             'ts_source': self.ts_source,
             'ts_bus_available': self.ts_bus_available,
             'ts_bus_joined': self.ts_bus_joined,
@@ -198,7 +212,7 @@ class Concert:
             self.agents.append(agent)
 
 concert = Concert(env, data)
-env.run(until=100)
+env.run(until=200)
 
 
 # %%
@@ -210,3 +224,5 @@ agents
 buses = pd.DataFrame([bus.results() for bus in concert.buses])
 buses.to_csv('buses.csv', index=False, float_format='%.02f')
 buses
+
+# %%

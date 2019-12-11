@@ -218,11 +218,11 @@ env.run(until=200)
 # %%
 
 agents = pd.DataFrame([agent.results() for agent in concert.agents])
-agents.to_csv('agents.csv', index=False, float_format='%.02f')
+agents.to_csv('sketch/data/agents.csv', index=False, float_format='%.02f')
 agents
 # %%
 buses = pd.DataFrame([bus.results() for bus in concert.buses])
-buses.to_csv('buses.csv', index=False, float_format='%.02f')
+buses.to_csv('sketch/data/buses.csv', index=False, float_format='%.02f')
 buses
 
 # %%

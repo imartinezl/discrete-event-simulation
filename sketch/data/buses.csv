@@ -1,0 +1,7 @@
+bus_id,bus_is_full,driver_out_patience,ts_departed,ts_destination,ts_source
+0,True,False,5.50,10.50,5
+1,True,False,10.50,15.50,10
+2,False,True,47.00,52.00,20
+3,False,True,57.00,62.00,30
+4,False,True,67.00,72.00,40
+5,False,True,77.10,82.10,50

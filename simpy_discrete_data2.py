@@ -17,11 +17,9 @@ TRAVEL_TIME = 5
 
 bus_ts_source = [5, 10, 20, 30, 40, 50]
 agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-agent_ts_sink = [30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
 data = {
     'bus_ts_source': bus_ts_source,
     'agent_ts_source': agent_ts_source,
-    'agent_ts_sink': agent_ts_sink
 }
 
 env = simpy.Environment()
@@ -154,7 +152,6 @@ class Concert:
         # init process data 
         self.bus_ts_source = data['bus_ts_source']
         self.agent_ts_source = data['agent_ts_source']
-        # self.agent_ts_sink = data['agent_ts_sink']
 
         self.n_buses = len(self.bus_ts_source)
         self.n_agents = len(self.agent_ts_source)
@@ -197,7 +194,6 @@ class Concert:
     def init_agents(self):
         for agent_id in range(self.n_agents):
             ts_source = self.agent_ts_source[agent_id]
-            # sink_time = self.agent_sink_times[agent_id]
             agent = Agent(self.env, self.queue, agent_id, ts_source)
             self.agents.append(agent)
 
@@ -208,9 +204,9 @@ env.run(until=100)
 # %%
 
 agents = pd.DataFrame([agent.results() for agent in concert.agents])
+agents.to_csv('agents.csv', index=False, float_format='%.02f')
 agents
 # %%
-bus = pd.DataFrame([bus.results() for bus in concert.buses])
-bus
-
-# %%
+buses = pd.DataFrame([bus.results() for bus in concert.buses])
+buses.to_csv('buses.csv', index=False, float_format='%.02f')
+buses

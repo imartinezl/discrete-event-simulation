@@ -31,10 +31,10 @@ class Concert:
         self.bus_source_times = data['bus_source_times']
         self.agent_source_times = data['agent_source_times']
         self.agent_sink_times = data['agent_sink_times']
-        self.buses = []
-        self.bus_depart = []
-        self.available_time = []
-        self.results = []
+        self.buses = [] # dictionary to save bus resource
+        self.bus_depart = [] # event array for bus departure
+        self.available_time = [] # array of buses avaiable time
+        self.results = [] # dictionary to save agents data
 
         self.queue = simpy.Resource(self.env, capacity=QUEUES) # create waiting queue
         self.bus_available = self.env.event() # event for available bus

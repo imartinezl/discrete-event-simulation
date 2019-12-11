@@ -18,3 +18,10 @@ void setup() {
   println(buses.get(0).ts_departed);
   println(agents.get(0).ts_source);
 }
+
+
+float ts = 0.0;
+void draw(){
+  
+  ts = ts + 0.01;
+}

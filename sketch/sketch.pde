@@ -5,6 +5,8 @@ ArrayList<Agent> agents = new ArrayList<Agent>();
 
 void setup() {
 
+  size(600,600);
+  
   Table tableBus = loadTable("buses.csv", "header");
   Table tableAgent = loadTable("agents.csv", "header");
   //int nbuses = table.getRowCount(); 
@@ -13,15 +15,28 @@ void setup() {
     buses.add(new Bus(row));
   }
   for (TableRow row : tableAgent.rows()) {
-    agents.add(new Agent(row));
+    agents.add(new Agent(row, buses));
   }
-  println(buses.get(0).ts_departed);
-  println(agents.get(0).ts_source);
+
 }
 
 
-float ts = 0.0;
+float ts = 0.0, ts_incr = 0.1;
 void draw(){
-  
-  ts = ts + 0.01;
+  background(255);
+  for(Bus bus: buses){
+    bus.update(ts);
+    bus.display(ts);
+  }
+  for(Agent agent: agents){
+    agent.update(ts);
+    agent.display(ts);
+  }
+  ts = ts + ts_incr;
+  if(abs(ts % 1) < ts_incr){
+    println(ts);
+  }
+  if(ts > 100){
+    noLoop();
+  }
 }

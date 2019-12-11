@@ -10,38 +10,42 @@ import pandas as pd
 
 QUEUES = 1
 PATIENCE = 27
-MONITOR_AT = 0.001
+MONITOR_AT = 0.1
 BUS_FREQUENCY = 10
 BUS_CAPACITY = 4
 TRAVEL_TIME = 5
 
-bus_source_times = [5, 10, 20, 30, 40, 50]
-agent_source_times = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-agent_sink_times = [30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
+bus_ts_source = [5, 10, 20, 30, 40, 50]
+agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+agent_ts_sink = [30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
 data = {
-    'bus_source_times': bus_source_times,
-    'agent_source_times': agent_source_times,
-    'agent_sink_times': agent_sink_times
+    'bus_ts_source': bus_ts_source,
+    'agent_ts_source': agent_ts_source,
+    'agent_ts_sink': agent_ts_sink
 }
 
 env = simpy.Environment()
 bus_available = env.event()
 
 class Bus():
-    def __init__(self, env, bus_id, source_time):
+    def __init__(self, env, bus_id, ts_source):
         self.bus_id = bus_id
         self.env = env
-        self.source_time = source_time
+        self.ts_source = ts_source
 
-        self.res = None
+        self.print = False # control print statemets
+        self.bus_is_full = False
+        self.driver_out_patience = False
+        self.departed_event = self.env.event() # init departed event
+        self.res = None # init but resource
+
         self.env.process(self.process())
 
     def process(self):
-        yield self.env.timeout(self.source_time)  # bus arrival frequency
-        print('Bus %d arriving at %d' % (self.bus_id, self.env.now))
+        yield self.env.timeout(self.ts_source)  # bus arrival frequency
+        if self.print: print('Bus %d arriving at %.2f' % (self.bus_id, self.env.now))
 
         self.res = simpy.Resource(self.env, capacity=BUS_CAPACITY) # create bus resource
-        self.departed_event = self.env.event() # init departed event
         self.available_time = self.env.now # save available time
 
     def available(self):
@@ -54,22 +58,34 @@ class Bus():
             driver_waiting_time = self.env.now - self.available_time
             driver_out_patience = driver_waiting_time > PATIENCE
             bus_is_full = self.res.count == self.res.capacity
+            self.driver_out_patience = driver_out_patience
+            self.bus_is_full = bus_is_full
             return bus_is_full | driver_out_patience
         return False
         
     def trigger_departed(self):
-        if self.departed():
-            if not self.departed_event.triggered:
+        if not self.departed_event.triggered:
+            if self.departed():
                 self.departed_event.succeed()
-                print('Bus %d leaving at time %d' % (self.bus_id, self.env.now))
+                self.ts_departed = self.env.now
+                if self.print: print('Bus %d leaving at time %.2f' % (self.bus_id, self.ts_departed))
+
+    def results(self):
+        return {
+            'bus_id': self.bus_id,
+            'ts_source': self.ts_source,
+            'ts_departed': self.ts_departed,
+            'bus_is_full': self.bus_is_full,
+            'driver_out_patience': self.driver_out_patience,
+        }
 
 class Agent:
-    def __init__(self, env, queue, agent_id, source_time, sink_time):
+    def __init__(self, env, queue, agent_id, ts_source):
         self.env = env
         self.queue = queue
         self.agent_id = agent_id
-        self.source_time = source_time
-        self.sink_time = sink_time
+        self.ts_source = ts_source
+        self.print = False
 
         self.env.process(self.process())
    
@@ -83,8 +99,8 @@ class Agent:
         pass
 
     def arrival(self):
-        yield self.env.timeout(self.source_time)  # arrival time
-        print('Agent %d arriving at %d' % (self.agent_id, self.env.now))
+        yield self.env.timeout(self.ts_source)  # arrival time
+        if self.print: print('Agent %d arriving to queue at %.2f' % (self.agent_id, self.env.now))
 
     def queue_bus(self):
         global bus_available
@@ -95,42 +111,53 @@ class Agent:
         self.bus = bus_available.value # get one available bus
         self.queue.release(queue_request)  # release queue
         bus_available = self.env.event()  # restart bus_available event
+        self.ts_bus_available = self.env.now
 
     def join_bus(self):
         bus_request = self.bus.res.request()
         yield bus_request
-        print('Agent %d on bus %d at %d' % (self.agent_id, self.bus.bus_id, self.env.now))
-        # print('Bus %d count: %d' % (self.bus.bus_id, self.bus.res.count))
+        self.ts_bus_joined = self.env.now
+        if self.print: print('Agent %d on bus %d at %.2f' % (self.agent_id, self.bus.bus_id, self.ts_bus_joined))
+        # if self.print: print('Bus %d count: %d' % (self.bus.bus_id, self.bus.res.count))
 
     def depart_bus(self):
         yield self.bus.departed_event # check is bus departed
+        self.ts_bus_departed = self.env.now
 
     def travel(self):
-        yield self.env.timeout(TRAVEL_TIME)  # travel to destination
+        travel_time = np.random.normal(TRAVEL_TIME, 1)
+        yield self.env.timeout(travel_time)  # travel to destination
+        self.ts_destination = self.env.now
 
     def finish(self):
-        self.stop_time = self.env.now
-        self.simu_time = self.stop_time - self.source_time
-        print('Agent %d done at %d' % (self.agent_id, self.stop_time))
-        print('Agent %d took %d time' % (self.agent_id, self.simu_time))
+        self.ts_simulation = self.ts_destination - self.ts_source
+        if self.print: print('Agent %d done at %.2f' % (self.agent_id, self.ts_destination))
+        if self.print: print('Agent %d took %.2f time' % (self.agent_id, self.ts_simulation))
 
+    def results(self):
+        return {
+            'agent_id': self.agent_id,
+            'ts_source': self.ts_source,
+            'ts_bus_available': self.ts_bus_available,
+            'ts_bus_joined': self.ts_bus_joined,
+            'ts_bus_departed': self.ts_bus_departed,
+            'ts_destination': self.ts_destination,
+            'ts_simulation': self.ts_simulation            
+        }
         
-
-
 class Concert:
 
     def __init__(self, env, data):
         self.env = env
         self.queue = simpy.Resource(env, capacity=QUEUES)
 
-
         # init process data 
-        self.bus_source_times = data['bus_source_times']
-        self.agent_source_times = data['agent_source_times']
-        self.agent_sink_times = data['agent_sink_times']
+        self.bus_ts_source = data['bus_ts_source']
+        self.agent_ts_source = data['agent_ts_source']
+        # self.agent_ts_sink = data['agent_ts_sink']
 
-        self.n_buses = len(self.bus_source_times)
-        self.n_agents = len(self.agent_source_times)
+        self.n_buses = len(self.bus_ts_source)
+        self.n_agents = len(self.agent_ts_source)
 
         self.buses = []
         self.agents = []
@@ -164,18 +191,26 @@ class Concert:
 
     def init_buses(self):
         for bus_id in range(self.n_buses):
-            bus = Bus(self.env, bus_id, self.bus_source_times[bus_id])
+            bus = Bus(self.env, bus_id, self.bus_ts_source[bus_id])
             self.buses.append(bus)
 
     def init_agents(self):
         for agent_id in range(self.n_agents):
-            source_time = self.agent_source_times[agent_id]
-            sink_time = self.agent_sink_times[agent_id]
-            agent = Agent(self.env, self.queue, agent_id, source_time, sink_time)
+            ts_source = self.agent_ts_source[agent_id]
+            # sink_time = self.agent_sink_times[agent_id]
+            agent = Agent(self.env, self.queue, agent_id, ts_source)
             self.agents.append(agent)
 
 concert = Concert(env, data)
 env.run(until=100)
 
+
+# %%
+
+agents = pd.DataFrame([agent.results() for agent in concert.agents])
+agents
+# %%
+bus = pd.DataFrame([bus.results() for bus in concert.buses])
+bus
 
 # %%

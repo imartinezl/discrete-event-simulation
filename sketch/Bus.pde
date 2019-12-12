@@ -1,10 +1,11 @@
 
 class Bus {
 
-  PVector p0, p1, p;
+  PVector p0, p1, p2, p3, p;
   int bus_id;
   boolean bus_is_full, driver_out_patience;
   float ts_source, ts_departed, ts_destination;
+  float k, ts_extra = 3;
 
   Bus(TableRow row) {
     bus_id = row.getInt("bus_id");
@@ -18,19 +19,28 @@ class Bus {
   }
 
   void init() {
-    float s = randomGaussian()*10;
-    p0 = new PVector(50, height/2 + bus_id*20);
-    p1 = new PVector(550, height/2 + bus_id*20);
+    //float s = randomGaussian()*10;
+    p0 = new PVector(-50, height/2 + bus_id*20);
+    p1 = new PVector( 50, height/2 + bus_id*20);
+    p2 = new PVector(550, height/2 + bus_id*20);
+    p3 = new PVector(650, height/2 + bus_id*20);
   }
 
   void update(float ts) {
-    float k = (ts-ts_departed)/(ts_destination-ts_departed);
-    k = constrain(k, 0, 1);
-    p = PVector.lerp(p0, p1, k);
+    if (ts > ts_destination & ts < ts_destination + ts_extra) {
+      k = (ts-ts_destination)/ts_extra;
+      p = PVector.lerp(p2, p3, k);
+    } else if (ts > ts_departed & ts < ts_destination) {
+      k = (ts-ts_departed)/(ts_destination-ts_departed);
+      p = PVector.lerp(p1, p2, k);
+    } else if (ts > ts_source-ts_extra & ts < ts_source) {
+      k = (ts-ts_source + ts_extra)/ts_extra;
+      p = PVector.lerp(p0, p1, k);
+    }
   }
 
   void display(float ts) {
-    if (ts > ts_source) {
+    if (ts > ts_source - ts_extra && ts < ts_destination + ts_extra) {
       noFill();
       stroke(0);
       if ( ts > ts_departed ) {

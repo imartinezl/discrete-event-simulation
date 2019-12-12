@@ -10,6 +10,7 @@ import pandas as pd
 
 QUEUES = 1
 PATIENCE = 27
+JOINING = 2
 MONITOR_AT = 0.1
 BUS_FREQUENCY = 10
 BUS_CAPACITY = 4
@@ -106,7 +107,7 @@ class Agent:
         yield env.process(self.join_bus())
         yield env.process(self.depart_bus())
         yield env.process(self.travel())
-        self.finish()
+        yield env.process(self.finish())
         pass
 
     def arrival(self):
@@ -127,6 +128,7 @@ class Agent:
     def join_bus(self):
         bus_request = self.bus.res.request()
         yield bus_request
+        yield self.env.timeout(JOINING)
         self.ts_bus_joined = self.env.now
         if self.print: print('Agent %d on bus %d at %.2f' % (self.agent_id, self.bus.bus_id, self.ts_bus_joined))
         # if self.print: print('Bus %d count: %d' % (self.bus.bus_id, self.bus.res.count))
@@ -137,10 +139,12 @@ class Agent:
 
     def travel(self):
         yield self.bus.reached_event
-        self.ts_destination = self.env.now
-        self.bus.ts_destination = self.ts_destination
+        self.ts_reached = self.env.now
+        self.bus.ts_destination = self.ts_reached
 
     def finish(self):
+        yield self.env.timeout(JOINING)
+        self.ts_destination = self.env.now
         self.ts_simulation = self.ts_destination - self.ts_source
         if self.print: print('Agent %d done at %.2f' % (self.agent_id, self.ts_destination))
         if self.print: print('Agent %d took %.2f time' % (self.agent_id, self.ts_simulation))
@@ -153,6 +157,7 @@ class Agent:
             'ts_bus_available': self.ts_bus_available,
             'ts_bus_joined': self.ts_bus_joined,
             'ts_bus_departed': self.ts_bus_departed,
+            'ts_reached': self.ts_reached,
             'ts_destination': self.ts_destination,
             'ts_simulation': self.ts_simulation            
         }

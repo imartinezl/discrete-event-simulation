@@ -10,7 +10,8 @@ import pandas as pd
 
 QUEUES = 1
 PATIENCE = 27
-JOINING = 2
+GET_ON = 0.3
+GET_OFF = 0.3
 MONITOR_AT = 0.1
 BUS_FREQUENCY = 10
 BUS_CAPACITY = 4
@@ -67,6 +68,7 @@ class Bus():
         if self.res:
             driver_waiting_time = self.env.now - self.available_time
             driver_out_patience = driver_waiting_time > PATIENCE
+            # print('Bus %d count: %d' % (self.bus_id, self.res.count))
             bus_is_full = self.res.count == self.res.capacity
             self.driver_out_patience = driver_out_patience
             self.bus_is_full = bus_is_full
@@ -92,12 +94,13 @@ class Bus():
         }
 
 class Agent:
-    def __init__(self, env, queue, agent_id, ts_source):
+    def __init__(self, env, queue_in, queue_out, agent_id, ts_source):
         self.env = env
-        self.queue = queue
+        self.queue_in = queue_in
+        self.queue_out = queue_out
         self.agent_id = agent_id
         self.ts_source = ts_source
-        self.print = False
+        self.print = True
 
         self.env.process(self.process())
    
@@ -107,7 +110,7 @@ class Agent:
         yield env.process(self.join_bus())
         yield env.process(self.depart_bus())
         yield env.process(self.travel())
-        yield env.process(self.finish())
+        self.finish()
         pass
 
     def arrival(self):
@@ -117,18 +120,18 @@ class Agent:
     def queue_bus(self):
         global bus_available
 
-        queue_request = self.queue.request()  # request access to queue
-        yield queue_request  # wait until turn to board a bus
+        queue_in_request = self.queue_in.request()  # request access to queue
+        yield queue_in_request  # wait until turn to board a bus
         yield bus_available  # wait until bus is available
-        self.bus = bus_available.value # get one available bus
-        self.queue.release(queue_request)  # release queue
-        bus_available = self.env.event()  # restart bus_available event
+        yield self.env.timeout(GET_ON)
         self.ts_bus_available = self.env.now
+        self.bus = bus_available.value # get one available bus
+        self.queue_in.release(queue_in_request)  # release queue
+        bus_available = self.env.event()  # restart bus_available event
+        
 
     def join_bus(self):
-        bus_request = self.bus.res.request()
-        yield bus_request
-        yield self.env.timeout(JOINING)
+        yield self.bus.res.request()
         self.ts_bus_joined = self.env.now
         if self.print: print('Agent %d on bus %d at %.2f' % (self.agent_id, self.bus.bus_id, self.ts_bus_joined))
         # if self.print: print('Bus %d count: %d' % (self.bus.bus_id, self.bus.res.count))
@@ -139,11 +142,17 @@ class Agent:
 
     def travel(self):
         yield self.bus.reached_event
-        self.ts_reached = self.env.now
-        self.bus.ts_destination = self.ts_reached
+        self.ts_bus_reached = self.env.now
+        #self.bus.ts_destination = self.ts_bus_reached
+        if self.print: print('Agent %d reached destination at %.2f' % (self.agent_id, self.ts_bus_reached))
+
+        queue_out_request = self.queue_out.request()  # request access to queue
+        yield queue_out_request  # wait until turn to board a bus
+        yield self.env.timeout(GET_OFF)
+        self.queue_out.release(queue_out_request)  # release queue
+
 
     def finish(self):
-        yield self.env.timeout(JOINING)
         self.ts_destination = self.env.now
         self.ts_simulation = self.ts_destination - self.ts_source
         if self.print: print('Agent %d done at %.2f' % (self.agent_id, self.ts_destination))
@@ -157,7 +166,7 @@ class Agent:
             'ts_bus_available': self.ts_bus_available,
             'ts_bus_joined': self.ts_bus_joined,
             'ts_bus_departed': self.ts_bus_departed,
-            'ts_reached': self.ts_reached,
+            'ts_bus_reached': self.ts_bus_reached,
             'ts_destination': self.ts_destination,
             'ts_simulation': self.ts_simulation            
         }
@@ -166,7 +175,8 @@ class Concert:
 
     def __init__(self, env, data):
         self.env = env
-        self.queue = simpy.Resource(env, capacity=QUEUES)
+        self.queue_in = simpy.Resource(env, capacity=QUEUES)
+        self.queue_out = simpy.Resource(env, capacity=QUEUES)
 
         # init process data 
         self.bus_ts_source = data['bus_ts_source']
@@ -213,7 +223,7 @@ class Concert:
     def init_agents(self):
         for agent_id in range(self.n_agents):
             ts_source = self.agent_ts_source[agent_id]
-            agent = Agent(self.env, self.queue, agent_id, ts_source)
+            agent = Agent(self.env, self.queue_in, self.queue_out, agent_id, ts_source)
             self.agents.append(agent)
 
 concert = Concert(env, data)
@@ -229,5 +239,8 @@ agents
 buses = pd.DataFrame([bus.results() for bus in concert.buses])
 buses.to_csv('sketch/data/buses.csv', index=False, float_format='%.02f')
 buses
+
+# %%
+
 
 # %%

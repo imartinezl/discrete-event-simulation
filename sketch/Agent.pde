@@ -3,7 +3,7 @@ class Agent{
   
   PVector p0, p1, p2, p3, p4, p;
   int agent_id, bus_id;
-  float ts_source, ts_bus_available, ts_bus_departed, ts_bus_joined, ts_destination, ts_simulation;
+  float ts_source, ts_bus_available, ts_bus_departed, ts_bus_joined, ts_bus_reached, ts_destination, ts_simulation;
   Bus bus;
   
   float k, ts_extra = 3;
@@ -15,6 +15,7 @@ class Agent{
     ts_bus_available = row.getFloat("ts_bus_available");
     ts_bus_departed = row.getFloat("ts_bus_departed");
     ts_bus_joined = row.getFloat("ts_bus_joined");
+    ts_bus_reached = row.getFloat("ts_bus_reached");
     ts_destination = row.getFloat("ts_destination");
     ts_simulation = row.getFloat("ts_simulation");
     
@@ -35,7 +36,6 @@ class Agent{
       k = (ts-ts_destination)/ts_extra;
       p = PVector.lerp(bus.p2.copy(), p3, k);
     } else if (ts > ts_bus_departed & ts < ts_destination) {
-      k = (ts-ts_bus_departed)/(ts_destination-ts_bus_departed);
       p = bus.p.copy();
     } else if (ts > ts_bus_available & ts < ts_bus_joined) {
       k = (ts-ts_bus_available)/(ts_bus_joined-ts_bus_available);

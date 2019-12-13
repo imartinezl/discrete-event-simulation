@@ -20,21 +20,21 @@ class Bus {
 
   void init() {
     //float s = randomGaussian()*10;
-    p0 = new PVector(-50, height/2 + bus_id*20);
-    p1 = new PVector( 50, height/2 + bus_id*20);
-    p2 = new PVector(550, height/2 + bus_id*20);
-    p3 = new PVector(650, height/2 + bus_id*20);
+    p0 = new PVector(-50, height/2);
+    p1 = new PVector( 50, height/2);
+    p2 = new PVector(550, height/2);
+    p3 = new PVector(650, height/2);
   }
 
   void update(float ts) {
-    if (ts > ts_destination & ts < ts_destination + ts_extra) {
+    if (ts > ts_destination-h & ts < ts_destination + ts_extra + h) {
       k = (ts-ts_destination)/ts_extra;
       p = PVector.lerp(p2, p3, k);
-    } else if (ts > ts_departed & ts < ts_destination) {
+    } else if (ts > ts_departed-h & ts < ts_destination + h) {
       k = (ts-ts_departed)/(ts_destination-ts_departed);
       p = PVector.lerp(p1, p2, k);
-    } else if (ts > ts_source-ts_extra & ts < ts_source) {
-      k = (ts-ts_source + ts_extra)/ts_extra;
+    } else if (ts > ts_source-ts_extra-h & ts < ts_source + h) {
+      k = (ts-(ts_source - ts_extra))/ts_extra;
       p = PVector.lerp(p0, p1, k);
     }
   }

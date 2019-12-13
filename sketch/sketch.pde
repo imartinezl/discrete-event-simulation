@@ -21,9 +21,10 @@ void setup() {
 }
 
 
-float ts = 0.0, ts_incr = 0.1;
+float ts = 0.0, h = 0.05;
 void draw(){
   background(255);
+  //frameRate(200);
   for(Bus bus: buses){
     bus.update(ts);
     bus.display(ts);
@@ -32,9 +33,9 @@ void draw(){
     agent.update(ts);
     agent.display(ts);
   }
-  ts = ts + ts_incr;
-  if(abs(ts % 1) < ts_incr){
-    println(ts);
+  ts = ts + h;
+  if(abs(ts % 1) < h){
+    //println(ts);
   }
   if(ts > 100){
     noLoop();

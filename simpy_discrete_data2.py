@@ -20,9 +20,9 @@ TRAVEL_TIME = 5
 bus_ts_source = [5, 10, 20, 30, 40, 50]
 agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-n_bus = 1
+n_bus = 2
 n_agent = 10
-bus_ts_source = np.cumsum(np.random.exponential(1, n_bus))
+bus_ts_source = np.cumsum(np.random.exponential(10, n_bus))
 agent_ts_source = np.cumsum(np.random.exponential(1, n_agent))
 data = {
     'bus_ts_source': bus_ts_source,
@@ -44,8 +44,9 @@ class Bus():
         self.driver_out_patience = False
 
         self.departed_event = self.env.event()  # init departed event
-        self.reached_event = self.env.event()  # init departed event
-        self.res = None  # init but resource
+        self.reached_event = self.env.event()  # init reached event
+        self.emptied_event = self.env.event()  # init emptied event
+        #self.res = None  # init but resource
 
         self.env.process(self.process())
 
@@ -65,18 +66,25 @@ class Bus():
         # travel_time = np.random.normal(TRAVEL_TIME, 1)
         yield self.env.timeout(TRAVEL_TIME)  # travel to destination
         self.reached_event.succeed()
+        self.ts_reached = self.env.now
+        if self.print:
+            print('Bus %d reached at %.2f' %
+                  (self.bus_id, self.ts_reached))
+
+        yield self.emptied_event
         self.ts_destination = self.env.now
         if self.print:
-            print('Bus %d reached destination at %.2f' %
+            print('Bus %d emptied at %.2f' %
                   (self.bus_id, self.ts_destination))
 
+
     def available(self):
-        if self.res:
-            return self.res.count < self.res.capacity
+        if hasattr(self, 'res'):
+            return (self.res.count < self.res.capacity) & (not self.departed_event.triggered)
         return False
 
     def departed(self):
-        if self.res:
+        if hasattr(self, 'res'):
             driver_waiting_time = self.env.now - self.available_time
             driver_out_patience = driver_waiting_time > PATIENCE
             # print('Bus %d count: %d' % (self.bus_id, self.res.count))
@@ -91,15 +99,24 @@ class Bus():
             if self.departed():
                 self.departed_event.succeed()
                 self.ts_departed = self.env.now
-                if self.print:
-                    print('Bus %d leaving at time %.2f' %
-                          (self.bus_id, self.ts_departed))
+
+    def emptied(self):
+        if hasattr(self, 'res'):
+            return (self.res.count == 0) & (self.departed_event.triggered)
+        return False
+
+    def trigger_emptied(self):
+        if not self.emptied_event.triggered:
+            if self.emptied():
+                self.emptied_event.succeed()
+                self.ts_emptied = self.env.now
 
     def results(self):
         return {
             'bus_id': self.bus_id,
             'ts_source': self.ts_source,
             'ts_departed': self.ts_departed,
+            'ts_reached': self.ts_reached,
             'ts_destination': self.ts_destination,
             'bus_is_full': self.bus_is_full,
             'driver_out_patience': self.driver_out_patience,
@@ -142,12 +159,14 @@ class Agent:
         self.ts_bus_available = self.env.now
         yield self.env.timeout(GET_ON)
         self.has_bus = True
+        print(self.agent_id)
         self.bus = bus_available.value  # get one available bus
         self.queue_in.release(queue_in_request)  # release queue
         bus_available = self.env.event()  # restart bus_available event
 
     def join_bus(self):
-        yield self.bus.res.request()
+        self.bus_request = self.bus.res.request()
+        yield self.bus_request
         self.ts_bus_joined = self.env.now
         if self.print:
             print('Agent %d on bus %d at %.2f' %
@@ -161,7 +180,7 @@ class Agent:
     def travel(self):
         yield self.bus.reached_event
         self.ts_bus_reached = self.env.now
-        #self.bus.ts_destination = self.ts_bus_reached
+        # self.bus.ts_destination = self.ts_bus_reached
         if self.print:
             print('Agent %d reached destination at %.2f' %
                   (self.agent_id, self.ts_bus_reached))
@@ -170,6 +189,8 @@ class Agent:
         yield queue_out_request  # wait until turn to board a bus
         yield self.env.timeout(GET_OFF)
         self.queue_out.release(queue_out_request)  # release queue
+
+        self.bus.res.release(self.bus_request)
 
     def finish(self):
         self.ts_destination = self.env.now
@@ -231,6 +252,8 @@ class Concert:
         self.env.process(self.monitor_any_bus_available())
         # monitor if the bus has departed
         self.env.process(self.monitor_bus_departed())
+        # monitor if the bus has reached and emptied
+        self.env.process(self.monitor_bus_emptied())
 
         self.init_buses()
         self.init_agents()
@@ -256,6 +279,12 @@ class Concert:
             for bus in self.buses:
                 bus.trigger_departed()
 
+    def monitor_bus_emptied(self):
+        while True:
+            yield self.env.timeout(MONITOR_AT)
+            for bus in self.buses:
+                bus.trigger_emptied()
+
     def init_buses(self):
         for bus_id in range(self.n_buses):
             bus = Bus(self.env, bus_id, self.bus_ts_source[bus_id])
@@ -270,11 +299,10 @@ class Concert:
 
 
 concert = Concert(env, data)
-env.run(until=200)
+env.run(until=1500)
 
 
 # %%
-
 agents = pd.DataFrame([agent.results() for agent in concert.agents])
 agents.to_csv('sketch/data/agents.csv', index=False, float_format='%.02f')
 agents
@@ -282,8 +310,6 @@ agents
 buses = pd.DataFrame([bus.results() for bus in concert.buses])
 buses.to_csv('sketch/data/buses.csv', index=False, float_format='%.02f')
 buses
-
-# %%
 
 
 # %%

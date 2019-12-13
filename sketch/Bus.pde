@@ -4,7 +4,7 @@ class Bus {
   PVector p0, p1, p2, p3, p;
   int bus_id;
   boolean bus_is_full, driver_out_patience;
-  float ts_source, ts_departed, ts_destination;
+  float ts_source, ts_departed, ts_reached, ts_destination;
   float k, ts_extra = 3;
 
   Bus(TableRow row) {
@@ -13,6 +13,7 @@ class Bus {
     driver_out_patience = boolean(row.getString("driver_out_patience"));
     ts_source = row.getFloat("ts_source");
     ts_departed = row.getFloat("ts_departed");
+    ts_reached = row.getFloat("ts_reached");
     ts_destination = row.getFloat("ts_destination");
 
     init();
@@ -30,8 +31,8 @@ class Bus {
     if (ts > ts_destination-h & ts < ts_destination + ts_extra + h) {
       k = (ts-ts_destination)/ts_extra;
       p = PVector.lerp(p2, p3, k);
-    } else if (ts > ts_departed-h & ts < ts_destination + h) {
-      k = (ts-ts_departed)/(ts_destination-ts_departed);
+    } else if (ts > ts_departed-h & ts < ts_reached + h) {
+      k = (ts-ts_departed)/(ts_reached-ts_departed);
       p = PVector.lerp(p1, p2, k);
     } else if (ts > ts_source-ts_extra-h & ts < ts_source + h) {
       k = (ts-(ts_source - ts_extra))/ts_extra;

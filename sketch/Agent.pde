@@ -2,7 +2,7 @@
 class Agent {
 
   PVector p0, p1, p2, p;
-  boolean has_bus;
+  boolean has_bus, fixed;
   int agent_id, bus_id;
   float ts_source, ts_bus_available, ts_bus_departed, ts_bus_joined, ts_bus_reached, ts_destination, ts_simulation;
   Bus bus;
@@ -32,6 +32,11 @@ class Agent {
     p0 = new PVector(50, height/2 - 50);
     p1 = new PVector(50, height/2 - 20);
     p2 = new PVector(550, height/2 - 20);
+    
+   
+    while (checkCollision(agents)) {
+      p0 = p0.add(PVector.random2D());
+    }
   }
 
   //void update(float ts, ArrayList<Agent> agents){
@@ -39,12 +44,15 @@ class Agent {
     if (has_bus) {
       move(ts);
     } else {
-      if (ts > ts_source - h) {
-        p = p0.copy();
-        while(checkCollision(agents)){
-          p = p.add(PVector.random2D().mult(r*3));  
-        }
-      }
+      //if (ts > ts_source - h) {
+      //  if (!fixed) {
+          p = p0.copy();
+      //    while (checkCollision(agents)) {
+      //      p = p.add(PVector.random2D());
+      //    }
+      //    fixed = true;
+      //  }
+      //}
     }
   }
 
@@ -66,9 +74,10 @@ class Agent {
 
   boolean checkCollision(ArrayList<Agent> agents) {
     boolean collide = false;
-    for(Agent agent: agents){
-      if(this.agent_id != agent.agent_id && agent.p != null){
-        if(pow(this.p.x-agent.p.x, 2) + pow(this.p.y-agent.p.y, 2) <= pow(r,2)){
+    for (Agent agent : agents) {
+      if (this.agent_id != agent.agent_id & agent.p != null) {
+        //if (pow(this.p.x-agent.p.x, 2) + pow(this.p.y-agent.p.y, 2) <= pow(r, 2)) {
+        if (this.p.dist(agent.p) < 2*r) {
           collide = true;
           break;
         }

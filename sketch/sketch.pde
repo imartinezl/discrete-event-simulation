@@ -21,7 +21,7 @@ void setup() {
 }
 
 
-float ts = 0.0, h = 0.05;
+float ts = 0.0, h = 0.1;
 void draw(){
   background(255);
   //frameRate(200);
@@ -30,7 +30,7 @@ void draw(){
     bus.display(ts);
   }
   for(Agent agent: agents){
-    agent.update(ts);
+    agent.update(ts, agents);
     agent.display(ts);
   }
   ts = ts + h;

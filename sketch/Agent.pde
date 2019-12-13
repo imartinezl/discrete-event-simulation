@@ -7,7 +7,7 @@ class Agent {
   float ts_source, ts_bus_available, ts_bus_departed, ts_bus_joined, ts_bus_reached, ts_destination, ts_simulation;
   Bus bus;
 
-  float k;
+  float k, r=5;
 
   Agent(TableRow row, ArrayList<Bus> buses) {
     agent_id = row.getInt("agent_id");
@@ -29,28 +29,30 @@ class Agent {
   }
 
   void init() {
-    p0 = new PVector(50, height/2 - 150);
-    p1 = new PVector(50, height/2 - 100);
-    p2 = new PVector(550, height/2 - 150);
+    p0 = new PVector(50, height/2 - 50);
+    p1 = new PVector(50, height/2 - 20);
+    p2 = new PVector(550, height/2 - 20);
   }
 
   //void update(float ts, ArrayList<Agent> agents){
-  void update(float ts) {
-    if(has_bus){
+  void update(float ts, ArrayList<Agent> agents) {
+    if (has_bus) {
       move(ts);
-    }else{
-      if(ts > ts_source - h){
-        p = p0.copy(); 
+    } else {
+      if (ts > ts_source - h) {
+        p = p0.copy();
+        while(checkCollision(agents)){
+          p = p.add(PVector.random2D().mult(r*3));  
+        }
       }
     }
-
   }
-  
-  void move(float ts){
+
+  void move(float ts) {
     if (ts > ts_bus_reached - h & ts < ts_destination + h) {
       k = (ts-ts_bus_reached)/(ts_destination-ts_bus_reached);
       p = PVector.lerp(bus.p2.copy(), p2, k);
-    } else if (ts > ts_bus_departed - h & ts < ts_destination + h) {
+    } else if (ts > ts_bus_departed - h & ts < ts_bus_reached + h) {
       p = bus.p.copy();
     } else if (ts > ts_bus_available - h & ts < ts_bus_joined + h) {
       k = (ts-ts_bus_available)/(ts_bus_joined-ts_bus_available);
@@ -63,7 +65,16 @@ class Agent {
   }
 
   boolean checkCollision(ArrayList<Agent> agents) {
-    return false;
+    boolean collide = false;
+    for(Agent agent: agents){
+      if(this.agent_id != agent.agent_id && agent.p != null){
+        if(pow(this.p.x-agent.p.x, 2) + pow(this.p.y-agent.p.y, 2) <= pow(r,2)){
+          collide = true;
+          break;
+        }
+      }
+    }
+    return collide;
   }
 
   void display(float ts) {
@@ -72,7 +83,7 @@ class Agent {
       fill(255, 0, 0);
       strokeWeight(1);
       stroke(0);
-      circle(p.x, p.y, 10);
+      circle(p.x, p.y, r*2);
     }
   }
 }

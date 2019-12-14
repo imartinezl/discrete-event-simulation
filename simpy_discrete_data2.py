@@ -20,8 +20,8 @@ TRAVEL_TIME = 5
 bus_ts_source = [5, 10, 20, 30, 40, 50]
 agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-n_bus = 2
-n_agent = 10
+n_bus = 100
+n_agent = 500
 bus_ts_source = np.cumsum(np.random.exponential(10, n_bus))
 agent_ts_source = np.cumsum(np.random.exponential(1, n_agent))
 data = {

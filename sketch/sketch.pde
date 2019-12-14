@@ -18,6 +18,9 @@ void setup() {
     agents.add(new Agent(row, buses));
   }
 
+  for(Agent agent: agents){
+    agent.init();
+  }
 }
 
 

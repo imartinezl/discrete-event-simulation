@@ -14,16 +14,16 @@ GET_ON = 1
 GET_OFF = 1
 MONITOR_AT = 0.1
 BUS_FREQUENCY = 10
-BUS_CAPACITY = 4
-TRAVEL_TIME = 5
+BUS_CAPACITY = 10
+TRAVEL_TIME = 35
 
 bus_ts_source = [5, 10, 20, 30, 40, 50]
 agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-n_bus = 100
-n_agent = 500
-bus_ts_source = np.cumsum(np.random.exponential(10, n_bus))
-agent_ts_source = np.cumsum(np.random.exponential(1, n_agent))
+n_bus = 150; rate_bus = 4
+n_agent = 500; rate_agent = 1
+bus_ts_source = np.cumsum(np.random.exponential(rate_bus, n_bus))
+agent_ts_source = np.cumsum(np.random.exponential(rate_agent, n_agent))
 data = {
     'bus_ts_source': bus_ts_source,
     'agent_ts_source': agent_ts_source,

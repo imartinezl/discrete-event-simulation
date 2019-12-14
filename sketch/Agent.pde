@@ -2,7 +2,7 @@
 class Agent {
 
   PVector p0, p1, p2, pos, prev_pos, source;
-  boolean has_bus, fixed;
+  boolean has_bus, with_collision = true;
   int agent_id, bus_id;
   float ts_source, ts_bus_available, ts_bus_departed, ts_bus_joined, ts_bus_reached, ts_destination, ts_simulation;
   Bus bus;
@@ -10,14 +10,14 @@ class Agent {
   PVector[] source_list;
 
   float k, r=5;
-  boolean with_collision = true;
+  int n = -1;
 
   Agent(TableRow row, ArrayList<Bus> buses) {
     agent_id = row.getInt("agent_id");
     has_bus = boolean(row.getString("has_bus"));
+    ts_source = row.getFloat("ts_source");
     if (has_bus) {
       bus_id = row.getInt("bus_id");
-      ts_source = row.getFloat("ts_source");
       ts_bus_available = row.getFloat("ts_bus_available");
       ts_bus_departed = row.getFloat("ts_bus_departed");
       ts_bus_joined = row.getFloat("ts_bus_joined");
@@ -27,59 +27,52 @@ class Agent {
 
       bus = buses.get(bus_id);
     }
-    //init();
   }
 
   void init() {
-    p0 = new PVector(50, height/2 - 50);
-    p1 = new PVector(50, height/2 - 20);
-    p2 = new PVector(550, height/2 - 100);
+    p0 = new PVector(100, height/2);
+    p1 = new PVector(100, height/2+100);
+    p2 = new PVector(500, height/2);
     if (has_bus) {
       ts_list = new float[]{ts_source, ts_bus_available, ts_bus_joined, ts_bus_departed, ts_bus_reached, ts_destination};
       source_list = new PVector[]{p0, p1, bus.p1, bus.p1, bus.p2, p2};
     }
     pos = p0;
     source = p0;
-
-    //if (with_collision) {
-    //  prev_pos = pos;
-    //  float m = 0.0;
-    //  while (check_collision(agents)) {
-    //    pos = PVector.add(prev_pos, PVector.fromAngle(theta).mult(m));
-    //    float n = floor(TWO_PI*m/(2*r));
-    //    n = max(n, 1);
-    //    theta = theta + TWO_PI/n;
-    //    if (theta > TWO_PI) {
-    //      m = m + 1;
-    //      theta = 0.0;
-    //    }
-    //  }
-    //}
-    
   }
 
-  //void update(float ts, ArrayList<Agent> agents){
+  boolean isDead(float ts) {
+    if (has_bus) {
+      return ts > ts_destination;
+    }
+    return false;
+  }
+
   void update(float ts, ArrayList<Agent> agents) {
-    if (ts > ts_source && ts < ts_destination) {
-      if (has_bus) {
+    if (has_bus) {
+      if (ts > ts_source & ts < ts_destination) {
         update_source(ts);
         move(agents);
-      }else{
-        
+      }
+    } else {
+      if (ts > ts_source) {
+        move(agents);
       }
     }
   }
 
-  float theta=0;
+  float theta=0, m=2*r;
   void move(ArrayList<Agent> agents) {
     if (with_collision) {
       prev_pos = pos;
-      float m = 0.0;
       PVector d = PVector.sub(source, prev_pos);
       pos = PVector.add(prev_pos, PVector.add(d, PVector.fromAngle(theta).mult(m)));
+      m = m - 1;
+      m = max(m, 0);
       while (check_collision(agents)) {
         pos = PVector.add(prev_pos, PVector.add(d, PVector.fromAngle(theta).mult(m)));
-        float n = floor(TWO_PI*m/(2*r));
+        //float n = floor(TWO_PI*m/(2*r));
+        float n = PI/asin(r/(m-r));
         n = max(n, 1);
         theta = theta + TWO_PI/n;
         if (theta > TWO_PI) {
@@ -104,7 +97,12 @@ class Agent {
 
 
   void update_source(float ts) {
-    int n = binary_search(ts_list, ts);
+    int n_new = binary_search(ts_list, ts);
+    if (with_collision & n_new != n) {
+      m = 2*r;
+      theta = 0;
+    }
+    n = n_new;
     source = get_source(ts, n);
   }
 
@@ -142,9 +140,10 @@ class Agent {
   }
 
   void display(float ts) {
-    //if (ts > ts_source && ts < ts_destination) {
+    //if (ts > ts_source & ts < ts_destination) {
     if (ts > ts_source) {
-      fill(255, 0, 0);
+      colorMode(HSB);
+      fill(agent_id, 255, 255, 100);
       strokeWeight(1);
       stroke(0);
       circle(pos.x, pos.y, r*2);

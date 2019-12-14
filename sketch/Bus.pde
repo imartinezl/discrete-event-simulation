@@ -1,7 +1,7 @@
 
 class Bus {
 
-  PVector p0, p1, p2, p3, p;
+  PVector p0, p1, p2, p3, pos;
   int bus_id;
   boolean bus_is_full, driver_out_patience;
   float ts_source, ts_departed, ts_reached, ts_destination;
@@ -21,22 +21,22 @@ class Bus {
 
   void init() {
     //float s = randomGaussian()*10;
-    p0 = new PVector(-50, height/2);
-    p1 = new PVector( 50, height/2);
-    p2 = new PVector(550, height/2);
-    p3 = new PVector(650, height/2);
+    p0 = new PVector(-50, height/2+100);
+    p1 = new PVector( 50, height/2+100);
+    p2 = new PVector(550, height/2+100);
+    p3 = new PVector(650, height/2+100);
   }
 
   void update(float ts) {
     if (ts > ts_destination-h & ts < ts_destination + ts_extra + h) {
       k = (ts-ts_destination)/ts_extra;
-      p = PVector.lerp(p2, p3, k);
+      pos = PVector.lerp(p2, p3, k);
     } else if (ts > ts_departed-h & ts < ts_reached + h) {
       k = (ts-ts_departed)/(ts_reached-ts_departed);
-      p = PVector.lerp(p1, p2, k);
+      pos = PVector.lerp(p1, p2, k);
     } else if (ts > ts_source-ts_extra-h & ts < ts_source + h) {
       k = (ts-(ts_source - ts_extra))/ts_extra;
-      p = PVector.lerp(p0, p1, k);
+      pos = PVector.lerp(p0, p1, k);
     }
   }
 
@@ -51,9 +51,9 @@ class Bus {
           stroke(0, 0, 255);
         }
       }
-      circle(p.x, p.y, 10);
+      circle(pos.x, pos.y, 10);
       rectMode(CENTER);
-      rect(p.x, p.y, 40, 20);
+      rect(pos.x, pos.y, 40, 20);
     }
   }
 }

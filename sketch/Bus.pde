@@ -21,10 +21,10 @@ class Bus {
 
   void init() {
     //float s = randomGaussian()*10;
-    p0 = new PVector(-50, height/2+100);
-    p1 = new PVector( 50, height/2+100);
-    p2 = new PVector(550, height/2+100);
-    p3 = new PVector(650, height/2+100);
+    p0 = new PVector(-100,height-100);
+    p1 = new PVector(100, height-100);
+    p2 = new PVector(500, height-100);
+    p3 = new PVector(700, height-100);
   }
 
   void update(float ts) {
@@ -41,7 +41,7 @@ class Bus {
   }
 
   void display(float ts) {
-    if (ts > ts_source - ts_extra && ts < ts_destination + ts_extra) {
+    if (ts > ts_source - ts_extra & ts < ts_destination + ts_extra) {
       noFill();
       stroke(0);
       if ( ts > ts_departed ) {

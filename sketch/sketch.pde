@@ -24,23 +24,26 @@ void setup() {
 }
 
 
-float ts = 0.0, h = 0.1;
+float ts = 0.0, h = 0.05;
 void draw(){
   background(255);
-  //frameRate(200);
+  frameRate(200);
   for(Bus bus: buses){
     bus.update(ts);
     bus.display(ts);
   }
-  for(Agent agent: agents){
-    agent.update(ts, agents);
-    agent.display(ts);
+  for(int i=0; i<agents.size(); i++){
+    agents.get(i).update(ts, agents);
+    agents.get(i).display(ts);
+    if(agents.get(i).isDead(ts)){
+      //agents.remove(i);
+    }
   }
   ts = ts + h;
   if(abs(ts % 1) < h){
     //println(ts);
   }
-  if(ts > 100){
+  if(ts > 1500){
     noLoop();
   }
 }

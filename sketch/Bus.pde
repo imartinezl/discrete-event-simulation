@@ -43,7 +43,9 @@ class Bus {
   void display(float ts) {
     if (ts > ts_source - ts_extra & ts < ts_destination + ts_extra) {
       noFill();
+      colorMode(RGB);
       stroke(0);
+      strokeWeight(2);
       if ( ts > ts_departed ) {
         if (bus_is_full) {
           stroke(255, 0, 0);

@@ -43,4 +43,5 @@ void draw() {
   if (ts > 1500) {
     noLoop();
   }
+  //saveFrame("figures/frame_######.png");
 }

@@ -144,14 +144,17 @@ class Agent { //<>// //<>//
   }
 
   void display(float ts) {
-    //if (ts > ts_source & ts < ts_destination) {
     if (ts > ts_source) {
       colorMode(HSB);
-      fill(#e2e2e2);
-      if (ts > ts_bus_joined & ts < ts_bus_departed) {
-        fill(#f49d0e);
-      } else if ( ts > ts_bus_departed & ts < ts_bus_reached ) {
-        fill(#f40eea);
+      fill(csource);
+      if (has_bus) {
+        if (ts > ts_bus_joined & ts < ts_bus_departed) {
+          fill(#f49d0e);
+        } else if ( ts > ts_bus_departed & ts < ts_bus_reached ) {
+          fill(#ffc300);
+        } else if ( ts > ts_bus_reached) {
+          fill(ctarget);
+        }
       }
       noStroke();
       circle(pos.x, pos.y, r*2);

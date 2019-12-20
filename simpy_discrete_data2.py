@@ -9,20 +9,21 @@ import pandas as pd
 # from bus import Bus
 
 QUEUES = 1
-PATIENCE = 27
-GET_ON = 1
-GET_OFF = 1
+PATIENCE = 150
+GET_ON = 5
+GET_OFF = 5
 MONITOR_AT = 0.1
 BUS_FREQUENCY = 10
-BUS_CAPACITY = 10
-TRAVEL_TIME = 35
+BUS_CAPACITY = 8
+TRAVEL_TIME = 80
 
 bus_ts_source = [5, 10, 20, 30, 40, 50]
 agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-n_bus = 150; rate_bus = 4
-n_agent = 500; rate_agent = 1
+n_bus = 10; rate_bus = 60
+n_agent = 100; rate_agent = 5
 bus_ts_source = np.cumsum(np.random.exponential(rate_bus, n_bus))
+bus_ts_source = np.linspace(0, n_bus*rate_bus, n_bus)
 agent_ts_source = np.cumsum(np.random.exponential(rate_agent, n_agent))
 data = {
     'bus_ts_source': bus_ts_source,

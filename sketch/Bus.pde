@@ -21,7 +21,7 @@ class Bus {
 
   void init() {
     //float s = randomGaussian()*10;
-    p0 = new PVector(-100,height-100);
+    p0 = new PVector(-100, height-100);
     p1 = new PVector(100, height-100);
     p2 = new PVector(500, height-100);
     p3 = new PVector(700, height-100);
@@ -40,22 +40,36 @@ class Bus {
     }
   }
 
+  void bus_svg() {
+    pushMatrix();
+
+    translate(pos.x, pos.y);
+    rotate(-PI/6.8 + PI);
+    shapeMode(CENTER);
+    shape(s, 0, 0, 80, 80);
+
+    popMatrix();
+  }
+
   void display(float ts) {
     if (ts > ts_source - ts_extra & ts < ts_destination + ts_extra) {
-      noFill();
       colorMode(RGB);
-      stroke(0);
-      strokeWeight(2);
+      stroke(221, 22, 122);
+      strokeWeight(1);
       if ( ts > ts_departed ) {
         if (bus_is_full) {
-          stroke(255, 0, 0);
+          //stroke(255, 0, 0);
         } else if (driver_out_patience) {
-          stroke(0, 0, 255);
+          //stroke(0, 0, 255);
         }
       }
+      noFill();
       circle(pos.x, pos.y, 10);
+      fill(221, 22, 122);
       rectMode(CENTER);
       rect(pos.x, pos.y, 40, 20);
+      
+      bus_svg();
     }
   }
 }

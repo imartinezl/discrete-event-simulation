@@ -8,7 +8,7 @@ class Agent { //<>//
   float [] ts_list;
   PVector[] source_list;
 
-  float k, r=5;
+  float k, r=3;
   int n = 0;
 
   Agent(TableRow row, ArrayList<Bus> buses) {
@@ -147,13 +147,12 @@ class Agent { //<>//
     //if (ts > ts_source & ts < ts_destination) {
     if (ts > ts_source) {
       colorMode(HSB);
-      fill(agent_id, 255, 255, 100);
-      strokeWeight(1);
-      stroke(0);
+      //fill(agent_id, 255, 255, 100);
+      fill(200);
       noStroke();
       circle(pos.x, pos.y, r*2);
-      fill(0);
-      textAlign(CENTER, CENTER);
+      //fill(0);
+      //textAlign(CENTER, CENTER);
       //text(agent_id, pos.x, pos.y);
     }
   }

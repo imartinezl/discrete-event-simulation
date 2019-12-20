@@ -1,4 +1,4 @@
-class Agent { //<>//
+class Agent { //<>// //<>//
 
   PVector p0, p1, p2, pos, prev_pos, source;
   boolean has_bus, with_collision = true, new_target = true;
@@ -8,7 +8,7 @@ class Agent { //<>//
   float [] ts_list;
   PVector[] source_list;
 
-  float k, r=3;
+  float k, r=agent_r;
   int n = 0;
 
   Agent(TableRow row, ArrayList<Bus> buses) {
@@ -29,9 +29,9 @@ class Agent { //<>//
   }
 
   void init() {
-    p0 = new PVector(100, height/2-200);
-    p1 = new PVector(100, height/2+100);
-    p2 = new PVector(500, height/2-200);
+    p0 = new PVector(road_x, agent_y);
+    p1 = new PVector(road_x, height-road_y);
+    p2 = new PVector(width-road_x, agent_y);
     if (has_bus) {
       ts_list = new float[]{ts_source, ts_bus_available, ts_bus_joined, ts_bus_departed, ts_bus_reached, ts_destination};
       source_list = new PVector[]{p0, p0, bus.p1, bus.p1, bus.p2, p2};
@@ -67,7 +67,7 @@ class Agent { //<>//
   void move(ArrayList<Agent> agents, boolean attract) {
     if (with_collision) {
       prev_pos = pos;
-      PVector d = PVector.sub(source, prev_pos); //<>//
+      PVector d = PVector.sub(source, prev_pos);
       pos = PVector.add(prev_pos, PVector.add(d, PVector.fromAngle(theta).mult(m)));
       if (attract) {
         m = m - 1;
@@ -147,8 +147,12 @@ class Agent { //<>//
     //if (ts > ts_source & ts < ts_destination) {
     if (ts > ts_source) {
       colorMode(HSB);
-      //fill(agent_id, 255, 255, 100);
-      fill(200);
+      fill(#e2e2e2);
+      if (ts > ts_bus_joined & ts < ts_bus_departed) {
+        fill(#f49d0e);
+      } else if ( ts > ts_bus_departed & ts < ts_bus_reached ) {
+        fill(#f40eea);
+      }
       noStroke();
       circle(pos.x, pos.y, r*2);
       //fill(0);

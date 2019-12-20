@@ -5,7 +5,7 @@ class Bus {
   int bus_id;
   boolean bus_is_full, driver_out_patience;
   float ts_source, ts_departed, ts_reached, ts_destination;
-  float k, ts_extra = 3;
+  float k, ts_extra = 10;
 
   Bus(TableRow row) {
     bus_id = row.getInt("bus_id");
@@ -21,10 +21,10 @@ class Bus {
 
   void init() {
     //float s = randomGaussian()*10;
-    p0 = new PVector(-100, height-100);
-    p1 = new PVector(100, height-100);
-    p2 = new PVector(500, height-100);
-    p3 = new PVector(700, height-100);
+    p0 = new PVector(-road_x, road_y);
+    p1 = new PVector(road_x, road_y);
+    p2 = new PVector(width-road_x, road_y);
+    p3 = new PVector(width+road_x, road_y);
   }
 
   void update(float ts) {
@@ -42,33 +42,24 @@ class Bus {
 
   void bus_svg() {
     pushMatrix();
-
     translate(pos.x, pos.y);
-    rotate(-PI/6.8 + PI);
+    rotate(PI/2);
     shapeMode(CENTER);
-    shape(s, 0, 0, 80, 80);
-
+    shape(s, 0, 0, 40, 80);
     popMatrix();
+  }
+
+  void bus_rect() {
+    colorMode(RGB);
+    noStroke();
+    fill(#f40eea);
+    rectMode(CENTER);
+    rect(pos.x, pos.y, 70, 30);
   }
 
   void display(float ts) {
     if (ts > ts_source - ts_extra & ts < ts_destination + ts_extra) {
-      colorMode(RGB);
-      stroke(221, 22, 122);
-      strokeWeight(1);
-      if ( ts > ts_departed ) {
-        if (bus_is_full) {
-          //stroke(255, 0, 0);
-        } else if (driver_out_patience) {
-          //stroke(0, 0, 255);
-        }
-      }
-      noFill();
-      circle(pos.x, pos.y, 10);
-      fill(221, 22, 122);
-      rectMode(CENTER);
-      rect(pos.x, pos.y, 40, 20);
-      
+      //bus_rect();
       bus_svg();
     }
   }

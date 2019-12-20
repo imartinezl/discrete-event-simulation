@@ -2,19 +2,23 @@
 // Bus[] buses;
 ArrayList<Bus> buses = new ArrayList<Bus>();
 ArrayList<Agent> agents = new ArrayList<Agent>();
+PFont font;
 PShape s;
-
+float road_x = 100, road_y = 150, station_h = 35, station_w = 50, station_m = 12, agent_y = 450, agent_r = 3;
 
 void setup() {
 
-  size(600, 600);
-  //String[] fontList = PFont.list();
-  //printArray(fontList);
+  size(800, 600);
+  String[] fontList = PFont.list();
+  printArray(fontList);
 
   Table tableBus = loadTable("buses.csv", "header");
   Table tableAgent = loadTable("agents.csv", "header");
-  s = loadShape("blue bus - 90.svg");
+  s = loadShape("bus.svg");
+  s = loadShape("bus2.svg");
 
+  String fontName = "Lato Medium"; // "Roboto Condensed Bold"
+  font = createFont(fontName, 32);
 
 
   //int nbuses = table.getRowCount(); 
@@ -32,9 +36,9 @@ void setup() {
 }
 
 
-float ts = 0, h = 0.1;
+float ts = 0, h = 0.5;
 void draw() {
-  background(20);
+  background(50);
   environment();
   frameRate(200);
   for (Bus bus : buses) {
@@ -53,17 +57,4 @@ void draw() {
     noLoop();
   }
   //saveFrame("figures/frame_######.png");
-}
-
-
-
-void environment() {   
-  stroke(255);
-  strokeWeight(1);
-  line(0, height-120, width, height-120);
-  line(0, height-80, width, height-80);
-  textAlign(CENTER, CENTER);
-  textSize(20);
-  text("A", 100, height-60);
-  text("B", 500, height-60);
 }

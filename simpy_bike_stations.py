@@ -70,7 +70,7 @@ class Station:
     def __init__(self, env, station_id, location, capacity, bikes):
         self.env = env
         self.station_id = station_id
-        self.location = location
+        self.location = np.array(location)
         self.capacity = capacity
         self.bikes = bikes
 
@@ -104,14 +104,27 @@ class Agent:
         self.checked_source_stations = []
         self.checked_target_stations = []
 
+        self.event_create_task = self.env.event()
+        self.event_select_source_station = self.env.event()
+        self.event_select_target_station = self.env.event()
         
         self.env.process(self.process())
 
     def process(self):
-        self.create_task()
-        self.select_source_station()
+        yield self.event_create_task
+        self.location = self.source
+        yield self.event_select_source_station
         yield self.env.process(self.walk_to_source())
-        
+        self.location = self.source_station.location
+        yield self.env.process(self.pull_bike())
+        self.location = self.target_station.location
+        yield self.event_select_target_station
+        yield self.env.process(self.ride_bike())
+        yield self.env.process(self.push_bike())
+        yield self.env.process(self.walk_to_target())
+        self.location = self.target
+
+
         yield self.env.timeout(10)
         if self.print:
             print('Agent %d working at %.2f' % (self.agent_id, self.env.now))
@@ -131,7 +144,7 @@ class Agent:
         self.source_ts = self.env.now + self.random_time()
         self.target_ts = self.source_ts + self.random_time()
 
-        self.location = self.source
+        self.event_create_task.succeed()
         
 
     def dist(self, a, b):
@@ -139,8 +152,6 @@ class Agent:
     
     # def dist(self, station):
     #     return np.linalg.norm(self.location - station.location)
-
-    
 
     def select_source_station(self):
         values = []
@@ -164,6 +175,7 @@ class Agent:
                 station_id = e[station_id]
                 self.source_station = self.stations[station_id]
                 self.checked_source_stations.append(station_id)
+                self.event_select_source_station.succeed()
                 break
 
                 
@@ -201,6 +213,7 @@ class Agent:
                 station_id = e[station_id]
                 self.target_station = self.stations[station_id]
                 self.checked_target_stations.append(station_id)
+                self.event_select_target_station.succeed()
                 break
 
     def ride_bike(self):
@@ -209,7 +222,7 @@ class Agent:
 
     def push_bike(self):
         if self.target_station.has_slots():
-            yield self.target_station.container.get(1)
+            yield self.target_station.container.put(1)
             yield self.env.timeout(1)
         else:
             print("station has zero slots")

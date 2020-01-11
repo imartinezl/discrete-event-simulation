@@ -19,12 +19,12 @@ data = {
         {
             'location': [10, 10],
             'capacity': 5,
-            'bikes': 3
+            'nbikes': 3
         },
         {
             'location': [90, 90],
             'capacity': 5,
-            'bikes': 3
+            'nbikes': 3
         }
     ],
     'agents': [
@@ -43,42 +43,51 @@ class City:
         self.env = env
         self.data = data
 
-        self.n_stations = len(self.data['stations'])
-        self.n_agents = len(self.data['agents'])
+        # self.n_stations = len(self.data['stations'])
+        # self.n_agents = len(self.data['agents'])
         self.stations = []
         self.agents = []
 
         self.init_stations()
+        self.init_bikes()
         self.init_agents()
 
     def init_stations(self):
-        for station_id in range(self.n_stations):
-            location = self.data['stations'][station_id]['location']
-            capacity = self.data['stations'][station_id]['capacity']
-            bikes = self.data['stations'][station_id]['bikes']
-            station = Station(self.env, station_id, location, capacity, bikes)
+        for station_id, station_data in enumerate(self.data['stations']):
+            location = station_data['location']
+            capacity = station_data['capacity']
+            nbikes = station_data['nbikes']
+            station = Station(self.env, station_id, location, capacity, nbikes)
             self.stations.append(station)
 
+    def init_bikes(self):
+        for station_data in self.data['stations']:
+            nbikes = station_data['nbikes']
+            for bike_id in range(nbikes):
+                bike = Bike(self.env, bike_id, station_id)
+                self.bikes.append(bike)
+
     def init_agents(self):
-        for agent_id in range(self.n_agents):
+        for agent_id, agent_data in enumerate(self.agents):
             grid = self.data['grid']
             stations = self.stations
-            agent = Agent(self.env, agent_id, grid, stations)
+            agent = Agent(self.env, agent_id, grid, stations, None)
             self.agents.append(agent)
+
 
 
 class Station:
 
-    def __init__(self, env, station_id, location, capacity, bikes):
+    def __init__(self, env, station_id, location, capacity, nbikes):
         self.env = env
         self.station_id = station_id
         self.location = np.array(location)
         self.capacity = capacity
-        self.bikes = bikes
+        self.nbikes = nbikes
 
         self.resource = simpy.Resource(self.env, capacity=1)
         self.container = simpy.Container(
-            self.env, self.capacity, init=self.bikes)
+            self.env, self.capacity, init=self.nbikes)
 
     def has_bikes(self):
         return self.container.level > 0
@@ -102,16 +111,16 @@ class Station:
         print('[%.2f] Station %d has %d bikes out of %d' % 
             (self.env.now, self.station_id, self.container.level, self.capacity))
 
-
 class Agent:
 
-    def __init__(self, env, agent_id, grid, stations):
+    def __init__(self, env, agent_id, grid, stations, bikes):
         self.env = env
         self.agent_id = agent_id
         self.grid = grid
         self.stations = stations
 
         self.print = True
+        self.bike_id = None
         self.source_station_id = None
         self.target_station_id = None
         self.checked_source_stations = []
@@ -132,13 +141,15 @@ class Agent:
         self.select_source_station()
         yield self.event_select_source_station
         yield self.env.process(self.walk_to_source())
-        self.location = self.source_station.location
+        source_station = self.stations[self.source_station_id]
+        self.location = source_station.location
         yield self.env.process(self.pull_bike())
         self.location = self.target
         self.select_target_station()
         yield self.event_select_target_station
         yield self.env.process(self.ride_bike())
-        self.location = self.target_station.location
+        target_station = self.stations[self.target_station_id]
+        self.location = target_station.location
         yield self.env.process(self.push_bike())
         yield self.env.process(self.walk_to_target())
         self.location = self.target
@@ -178,8 +189,8 @@ class Agent:
     def init_agent(self):
         yield self.env.timeout(self.source_ts)
         if self.print:
-            print('[%.2f] Agent %d initialized' %
-                  (self.env.now, self.agent_id))
+            print('[%.2f] Agent %d initialized at source [%.2f, %.2f]' %
+                  (self.env.now, self.agent_id, *self.source))
 
     def dist(self, a, b):
         return np.linalg.norm(a - b)
@@ -214,14 +225,13 @@ class Agent:
                 break
 
     def walk_to_source(self):
-        if self.source_station_id is not None:
-            source_station = self.stations[self.source_station_id]
-            distance = self.dist(self.location, source_station.location)
-            yield self.env.timeout(distance)
+        source_station = self.stations[self.source_station_id]
+        distance = self.dist(self.location, source_station.location)
+        yield self.env.timeout(distance)
 
-            if self.print:
-                print('[%.2f] Agent %d walked to source station %d' %
-                      (self.env.now, self.agent_id, self.source_station_id))
+        if self.print:
+            print('[%.2f] Agent %d walked to source station %d' %
+                    (self.env.now, self.agent_id, self.source_station_id))
 
     def pull_bike(self):
         source_station = self.stations[self.source_station_id]
@@ -280,31 +290,43 @@ class Agent:
                   (self.env.now, self.agent_id, self.source_station_id, self.target_station_id))
 
     def push_bike(self):
-        if self.target_station.has_docks():
-            yield self.env.process(self.target_station.push_bike())
+        target_station = self.stations[self.target_station_id]
+        if target_station.has_docks():
+            yield self.env.process(target_station.push_bike())
             # yield self.target_station.container.put(1)
             # yield self.env.timeout(1)
             if self.print:
                 print('[%.2f] Agent %d pushed bike on station %d' %
-                      (self.env.now, self.agent_id, self.target_station.station_id))
-                self.target_station.print_info()
+                      (self.env.now, self.agent_id, self.target_station_id))
+                target_station.print_info()
         else:
             print("station has zero docks")
 
     def walk_to_target(self):
-        if self.target_station is not None:
-            distance = self.dist(self.target_station.location, self.location)
-            yield self.env.timeout(distance)
+        target_station = self.stations[self.target_station_id]
+        distance = self.dist(target_station.location, self.location)
+        yield self.env.timeout(distance)
+    
+        if self.print:
+            print('[%.2f] Agent %d walked to target [%.2f, %.2f]' %
+                    (self.env.now, self.agent_id, *self.target))
 
 class Bike:
     def __init__(self, env, bike_id):
         self.env = env
         self.bike_id = bike_id
+        self.stations = stations
+        self.agents = agents
+
+        self.station_id = None
+        self.agent_id = None
 
     def set_station(self, station_id):
         self.station_id = station_id
 
-        pass
+    def set_agent(self, agent_id):
+        self.agent_id = agent_id
+
 
 env = simpy.Environment()
 city = City(env, data)

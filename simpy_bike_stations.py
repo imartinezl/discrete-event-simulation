@@ -18,24 +18,25 @@ data = {
     'stations': [
         {
             'location': [10, 10],
-            'capacity': 5,
-            'nbikes': 3
+            'capacity': 5
         },
         {
             'location': [90, 90],
-            'capacity': 5,
-            'nbikes': 3
+            'capacity': 5
         }
     ],
-    'agents': [
-        {
-            'age': 18
-        },
-        # {
-        #     'age': 28
-        # }
-    ]
+    'bikes': [
+        {'station': 0},
+        {'station': 0},
+        {'station': 0},
+        {'station': 1},
+        {'station': 1},
+        {'station': 1},
+    ],
+    'nagents': 1,
 }
+
+
 
 
 class City:
@@ -44,50 +45,58 @@ class City:
         self.data = data
 
         # self.n_stations = len(self.data['stations'])
-        # self.n_agents = len(self.data['agents'])
+        # self.n_bikes = len(self.data['bikes'])
+        # self.n_agents = self.data['nagents']
         self.stations = []
+        self.bikes = []
         self.agents = []
+        
+        self.start()
 
+    def start(self):
         self.init_stations()
         self.init_bikes()
         self.init_agents()
 
     def init_stations(self):
         for station_id, station_data in enumerate(self.data['stations']):
-            location = station_data['location']
-            capacity = station_data['capacity']
-            nbikes = station_data['nbikes']
-            station = Station(self.env, station_id, location, capacity, nbikes)
+            station = Station(self.env, station_id)
+            station.set_data(station_data)
+            station.init_station()
             self.stations.append(station)
-
+        
     def init_bikes(self):
-        for station_data in self.data['stations']:
-            nbikes = station_data['nbikes']
-            for bike_id in range(nbikes):
-                bike = Bike(self.env, bike_id, station_id)
-                self.bikes.append(bike)
+        for bike_id, bike_data in enumerate(self.data['bikes']):
+            bike = Bike(self.env, bike_id)
+            station_id = bike_data['station']
+            bike.set_station(station_id) # assign bike to station
+            self.stations[station_id].push_bike(bike_id)
+            self.bikes.append(bike)
+            self.stations[station_id].print_info()
 
     def init_agents(self):
-        for agent_id, agent_data in enumerate(self.agents):
-            grid = self.data['grid']
-            stations = self.stations
-            agent = Agent(self.env, agent_id, grid, stations, None)
+        for agent_id in range(self.data['nagents']):
+            agent = Agent(self.env, agent_id)
+            agent.set_data(self.data['grid'], self.stations, self.bikes)
             self.agents.append(agent)
-
 
 
 class Station:
 
-    def __init__(self, env, station_id, location, capacity, nbikes):
+    def __init__(self, env, station_id):
         self.env = env
         self.station_id = station_id
-        self.location = np.array(location)
-        self.capacity = capacity
-        self.nbikes = nbikes
+        self.location = None
+        self.capacity = None
+        self.bikes = []
 
+    def init_station(self):
         self.resource = simpy.Resource(self.env, capacity=1)
-        self.container = simpy.Container(
-            self.env, self.capacity, init=self.nbikes)
+        self.container = simpy.Container(self.env, self.capacity, init=0)
+
+    def set_data(self, data):
+        self.location = np.array(data['location'])
+        self.capacity = data['capacity']
 
     def has_bikes(self):
         return self.container.level > 0
@@ -101,36 +110,61 @@ class Station:
     def full(self):
         return self.container.level == self.capacity
 
-    def pull_bike(self):
-        yield self.container.get(1)
+    def pull_bike(self, bike_id):
+        self.bikes.remove(bike_id)
+        self.container.get(1)
 
-    def push_bike(self):
-        yield self.container.put(1)
+    def push_bike(self, bike_id):
+        self.bikes.append(bike_id)
+        self.container.put(1)
 
     def print_info(self):
         print('[%.2f] Station %d has %d bikes out of %d' % 
             (self.env.now, self.station_id, self.container.level, self.capacity))
 
+
+class Bike:
+    def __init__(self, env, bike_id):
+        self.env = env
+        self.bike_id = bike_id
+
+        self.station_id = None
+        self.agent_id = None
+
+    def set_station(self, station_id):
+        self.station_id = station_id
+
+    def set_agent(self, agent_id):
+        self.agent_id = agent_id
+
+
 class Agent:
 
-    def __init__(self, env, agent_id, grid, stations, bikes):
+    def __init__(self, env, agent_id):
         self.env = env
         self.agent_id = agent_id
-        self.grid = grid
-        self.stations = stations
+        self.grid = None
+        self.stations = None
+        self.bikes = None
 
         self.print = True
+        self.location = None
         self.bike_id = None
         self.source_station_id = None
         self.target_station_id = None
-        self.checked_source_stations = []
-        self.checked_target_stations = []
+        self.visited_source_stations = []
+        self.visited_target_stations = []
 
         self.event_setup_task = self.env.event()
         self.event_select_source_station = self.env.event()
         self.event_select_target_station = self.env.event()
 
-        self.env.process(self.process())
+        # self.env.process(self.process())
+
+    def set_data(self, grid, stations, bikes):
+        self.grid = grid
+        self.stations = stations
+        self.bikes = bikes
 
     def process(self):
         self.setup_task()
@@ -140,19 +174,19 @@ class Agent:
         self.location = self.source
         self.select_source_station()
         yield self.event_select_source_station
-        yield self.env.process(self.walk_to_source())
-        source_station = self.stations[self.source_station_id]
-        self.location = source_station.location
-        yield self.env.process(self.pull_bike())
-        self.location = self.target
-        self.select_target_station()
-        yield self.event_select_target_station
-        yield self.env.process(self.ride_bike())
-        target_station = self.stations[self.target_station_id]
-        self.location = target_station.location
-        yield self.env.process(self.push_bike())
-        yield self.env.process(self.walk_to_target())
-        self.location = self.target
+        # yield self.env.process(self.walk_to_source())
+        # source_station = self.stations[self.source_station_id]
+        # self.location = source_station.location
+        # yield self.env.process(self.pull_bike())
+        # self.location = self.target
+        # self.select_target_station()
+        # yield self.event_select_target_station
+        # yield self.env.process(self.ride_bike())
+        # target_station = self.stations[self.target_station_id]
+        # self.location = target_station.location
+        # yield self.env.process(self.push_bike())
+        # yield self.env.process(self.walk_to_target())
+        # self.location = self.target
 
         yield self.env.timeout(10)
         if self.print:
@@ -195,29 +229,31 @@ class Agent:
     def dist(self, a, b):
         return np.linalg.norm(a - b)
 
-    def select_source_station(self):
+    def current_station_info(self):
         values = []
         for station in self.stations:
             station_id = station.station_id
             has_bikes = station.has_bikes()
+            has_docks = station.has_docks()
+            visited_source = station_id in self.visited_source_stations
+            visited_target = station_id in self.visited_target_stations
             distance = self.dist(self.location, station.location)
             walkable = distance < WALK_RADIUS
-            visited = station_id in self.checked_target_stations
-            values.append((station_id, has_bikes, distance, walkable, visited))
-        # labels = ['station_id','has_bikes','distance','walkable','visited']
-        # types = [int,bool,float,bool,bool]
-        # dtype = list(zip(labels, types))
-        dtype = [('station_id', int), ('has_bikes', int),
-                 ('distance', float), ('walkable', int), ('visited', int)]
-        self.source_station_info = np.array(values, dtype=dtype)
-        self.source_station_info_sorted = np.sort(
-            self.source_station_info, order='distance')
-        for e in self.source_station_info_sorted:
-            # print(e)
-            valid = e['has_bikes'] and e['walkable'] and not e['visited']
+            values.append((station_id, has_bikes, has_docks, visited_source, visited_target, distance, walkable))
+        labels = ['station_id','has_bikes','has_docks','visited_source','visited_target','distance','walkable']
+        types = [int,int,int,int,int,float,int]
+        dtype = list(zip(labels, types))
+        self.station_info = np.array(values, dtype=dtype)
+        self.station_info_sorted = np.sort(self.station_info, order='distance')
+
+    def select_source_station(self):
+        self.current_station_info()
+        for e in self.station_info_sorted:
+            print(e)
+            valid = e['has_bikes'] and not e['visited_source'] and e['walkable']
             if valid:
                 self.source_station_id = e['station_id']
-                self.checked_source_stations.append(self.source_station_id)
+                self.visited_source_stations.append(self.source_station_id)
                 self.event_select_source_station.succeed()
                 if self.print:
                     print('[%.2f] Agent %d selected source station %d' %
@@ -247,28 +283,13 @@ class Agent:
             print("station has zero bikes")
 
     def select_target_station(self):
-        values = []
-        for station in self.stations:
-            station_id = station.station_id
-            has_docks = station.has_docks()
-            distance = self.dist(self.location, station.location)
-            walkable = distance < WALK_RADIUS
-            visited = station_id in self.checked_target_stations
-            values.append((station_id, has_docks, distance, walkable, visited))
-        # labels = ['station_id','has_docks','distance','walkable','visited']
-        # types = [int,bool,float,bool,bool]
-        # dtype = list(zip(labels, types))
-        dtype = [('station_id', int), ('has_docks', int),
-                 ('distance', float), ('walkable', int), ('visited', int)]
-        self.target_station_info = np.array(values, dtype=dtype)
-        self.target_station_info_sorted = np.sort(
-            self.target_station_info, order='distance')
-        for e in self.target_station_info_sorted:
+        self.current_station_info()
+        for e in self.station_info_sorted:
             # print(e)
-            valid = e['has_docks'] and e['walkable'] and not e['visited']
+            valid = e['has_docks'] and not e['visited_target'] and e['walkable']
             if valid:
                 self.target_station_id = e['station_id']
-                self.checked_target_stations.append(self.target_station_id)
+                self.visited_target_stations.append(self.target_station_id)
                 self.event_select_target_station.succeed()
                 if self.print:
                     print('[%.2f] Agent %d selected target station %d' %
@@ -311,21 +332,7 @@ class Agent:
             print('[%.2f] Agent %d walked to target [%.2f, %.2f]' %
                     (self.env.now, self.agent_id, *self.target))
 
-class Bike:
-    def __init__(self, env, bike_id):
-        self.env = env
-        self.bike_id = bike_id
-        self.stations = stations
-        self.agents = agents
-
-        self.station_id = None
-        self.agent_id = None
-
-    def set_station(self, station_id):
-        self.station_id = station_id
-
-    def set_agent(self, agent_id):
-        self.agent_id = agent_id
+    
 
 
 env = simpy.Environment()

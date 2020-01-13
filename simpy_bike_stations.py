@@ -153,6 +153,7 @@ class Bike:
 
         self.station_id = None
         self.agent_id = None
+        self.location = None
 
         self.state = {}
         self.history = []
@@ -162,6 +163,9 @@ class Bike:
 
     def set_agent(self, agent_id):
         self.agent_id = agent_id
+
+    def set_location(self, location):
+        self.location = location
 
     def pop_station(self):
         self.station_id = None
@@ -182,6 +186,42 @@ class Bike:
         self.save_state()
         self.pop_agent()
         self.set_station(station_id)
+
+    def docked(self):
+        return self.station_id is not None
+
+    def rented(self):
+        return self.agent_id is not None
+    
+    def vacant(self):
+        return self.docked() or not self.rented()
+
+    def dist(self, a, b):
+        return np.linalg.norm(a - b)
+
+    def call(self, agent_id):
+        self.set_agent(agent_id)
+        self.state['agent_id'] = agent_id
+        self.state['time_call'] = np.round(self.env.now,2)
+        self.state['location_call'] = self.location
+
+    def autonomous_move(self, location):
+        distance = self.dist(self.location, location)
+        yield self.env.timeout(distance)
+        self.location = location
+        self.state['location_meet'] = self.location
+        self.state['time_meet'] = np.round(self.env.now,2)
+
+    def ride(self, location):
+        distance = self.dist(self.location, location)
+        yield self.env.timeout(distance)
+        self.location = location
+        self.state['location_drop'] = self.location
+        self.state['time_drop'] = np.round(self.env.now,2)
+
+    def drop(self):
+        self.pop_agent()
+        self.save_state()
 
     def save_state(self):
         self.history.append(self.state)

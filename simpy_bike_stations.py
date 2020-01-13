@@ -4,6 +4,7 @@ import simpy
 import random
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 RANDOM_SEED = 42
 random.seed(RANDOM_SEED)
@@ -34,6 +35,7 @@ data = {
         }
     ],
     'bikes': [
+        {'station': 0},
         {'station': 1},
         {'station': 2},
         {'station': 3},
@@ -196,22 +198,9 @@ class Agent:
         self.bikes = None
 
         self.print = True
-        self.location = None
-        self.bike_id = None
-        self.source_station_id = None
-        self.target_station_id = None
-        self.visited_source_stations = []
-        self.visited_target_stations = []
-
-        self.event_setup_task = self.env.event()
-        self.event_select_source_station = self.env.event()
-        self.event_select_target_station = self.env.event()
-        self.event_pull_bike = self.env.event()
-        self.event_push_bike = self.env.event()
-
-        self.source_history = []
-        self.target_history = []
         self.history = []
+
+        self.count = 0
 
     def set_data(self, grid, stations, bikes):
         self.grid = grid
@@ -219,6 +208,23 @@ class Agent:
         self.bikes = bikes
     
     def start(self):
+
+        self.location = None
+        self.bike_id = None
+        self.source_station_id = None
+        self.target_station_id = None
+        self.visited_source_stations = []
+        self.visited_target_stations = []      
+
+        self.source_history = []
+        self.target_history = []
+
+        self.event_setup_task = self.env.event()
+        self.event_select_source_station = self.env.event()
+        self.event_select_target_station = self.env.event()
+        self.event_pull_bike = self.env.event()
+        self.event_push_bike = self.env.event()
+
         self.env.process(self.process())
 
     def process(self):
@@ -245,7 +251,7 @@ class Agent:
             # 5-Select target station
             self.select_target_station()
 
-            self.stations[3].push_bike(-1)
+            # self.stations[3].push_bike(-1)
             
             # 6-Ride bike
             yield self.event_select_target_station
@@ -266,6 +272,10 @@ class Agent:
         if self.print:
             print('[%.2f] Agent %d working' % (self.env.now, self.agent_id))
 
+        self.count += 1
+        if self.count < 2:
+            self.start()
+
     def random_location(self):
         x = np.random.randint(*self.grid['xlim'])
         y = np.random.randint(*self.grid['ylim'])
@@ -281,7 +291,7 @@ class Agent:
         self.source = np.array([0, 0])
         self.target = np.array([100, 100])
 
-        self.time_source = np.round(self.env.now + self.random_time(),2)
+        self.time_source = np.round(self.random_time(),2)
         self.time_target_desired = np.round(self.time_source + self.random_time(),2)
 
         self.event_setup_task.succeed()
@@ -469,3 +479,31 @@ class Agent:
 env = simpy.Environment()
 city = City(env, data)
 env.run(until=1000)
+
+
+# %%
+
+stations = []
+for station_id, station in enumerate(city.stations):
+    df = pd.DataFrame(station.history).assign(station_id=station_id)
+    stations.append(df)
+df_stations = pd.concat(stations).set_index('station_id').reset_index()
+
+
+bikes = []
+for bike_id, bike in enumerate(city.bikes):
+    df = pd.DataFrame(bike.history).assign(bike_id=bike_id)
+    bikes.append(df)
+df_bikes = pd.concat(bikes, sort=False).set_index('bike_id').reset_index()
+
+agents = []
+for agent_id, agent in enumerate(city.agents):
+    df = pd.DataFrame(agent.history).assign(agent_id=agent_id)
+    source_history = pd.concat([pd.DataFrame(s) for s in df.source_history]).reset_index(drop=True)
+    target_history = pd.concat([pd.DataFrame(t) for t in df.target_history]).reset_index(drop=True)
+    df_extended = pd.concat([df, source_history, target_history], axis=1)
+    agents.append(df)
+    
+df_agents = pd.concat(agents).set_index('agent_id').reset_index()
+
+# %%

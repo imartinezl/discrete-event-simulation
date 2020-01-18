@@ -8,12 +8,13 @@ import matplotlib.pyplot as plt
 df_bus = pd.read_csv('./bus_service_jueves_SanMames.csv')
 df_bus.head()
 
-bus_arrival = []
+bus_ts_source = []
 for index, data in df_bus.iterrows():
-    buses = int(data.buses)
-    for i in range(buses):
-        ts_source = data.hora*60 + i*(60/buses)
-        bus_arrival.append(int(ts_source*60))
+    if (data.hora >= 16) & (data.hora <= 26):
+        buses = int(data.buses)
+        for i in range(buses):
+            ts_source = data.hora*60 + i*(60/buses) - 16*60
+            bus_ts_source.append(int(ts_source*60))
 
 ## Agent data
 def str2unix(x):
@@ -39,25 +40,27 @@ import pandas as pd
 
 # Time unit is Seconds
 QUEUES = 1
-PATIENCE = 150
+PATIENCE = 10*60
 GET_ON = 5
 GET_OFF = 5
-MONITOR_AT = 0.1
-BUS_FREQUENCY = 10
-BUS_CAPACITY = 8
-TRAVEL_TIME = 80
+MONITOR_AT = 2
+BUS_CAPACITY = 25
+TRAVEL_TIME = 25*60
 
-bus_ts_source = [5, 10, 20, 30, 40, 50]
-agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+# bus_ts_source = [5, 10, 20, 30, 40, 50]
+# agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-n_bus = 10; rate_bus = 60
-n_agent = 100; rate_agent = 5
-bus_ts_source = np.cumsum(np.random.exponential(rate_bus, n_bus))
-bus_ts_source = np.linspace(0, n_bus*rate_bus, n_bus)
-agent_ts_source = np.cumsum(np.random.exponential(rate_agent, n_agent))
+# n_bus = 10; rate_bus = 60
+# n_agent = 100; rate_agent = 5
+# bus_ts_source = np.cumsum(np.random.exponential(rate_bus, n_bus))
+# bus_ts_source = np.linspace(0, n_bus*rate_bus, n_bus)
+# agent_ts_source = np.cumsum(np.random.exponential(rate_agent, n_agent))
+
+
 data = {
     'bus_ts_source': bus_ts_source,
-    'agent_ts_source': agent_ts_source,
+    'agent_ts_source': df_agent.ts_source,
+    'agent_ts_target': df_agent.ts_target,
 }
 
 env = simpy.Environment()
@@ -155,14 +158,15 @@ class Bus():
 
 
 class Agent:
-    def __init__(self, env, queue_in, queue_out, agent_id, ts_source):
+    def __init__(self, env, queue_in, queue_out, agent_id, ts_source, ts_target):
         self.env = env
         self.queue_in = queue_in
         self.queue_out = queue_out
         self.agent_id = agent_id
         self.ts_source = ts_source
+        self.ts_target = ts_target
 
-        self.print = True
+        self.print = False
         self.has_bus = False
         self.env.process(self.process())
 
@@ -190,7 +194,7 @@ class Agent:
         self.ts_bus_available = self.env.now
         yield self.env.timeout(GET_ON)
         self.has_bus = True
-        print(self.agent_id)
+        # print(self.agent_id)
         self.bus = bus_available.value  # get one available bus
         self.queue_in.release(queue_in_request)  # release queue
         bus_available = self.env.event()  # restart bus_available event
@@ -240,6 +244,7 @@ class Agent:
                 'has_bus': self.has_bus,
                 'bus_id': self.bus.bus_id,
                 'ts_source': self.ts_source,
+                'ts_target': self.ts_target,
                 'ts_bus_available': self.ts_bus_available,
                 'ts_bus_joined': self.ts_bus_joined,
                 'ts_bus_departed': self.ts_bus_departed,
@@ -253,6 +258,7 @@ class Agent:
                 'has_bus': self.has_bus,
                 'bus_id': None,
                 'ts_source': self.ts_source,
+                'ts_target': self.ts_target,
                 'ts_bus_available': None,
                 'ts_bus_joined': None,
                 'ts_bus_departed': None,
@@ -262,7 +268,7 @@ class Agent:
             }
 
 
-class Concert:
+class Festival:
 
     def __init__(self, env, data):
         self.env = env
@@ -272,6 +278,7 @@ class Concert:
         # init process data
         self.bus_ts_source = data['bus_ts_source']
         self.agent_ts_source = data['agent_ts_source']
+        self.agent_ts_target = data['agent_ts_target']
 
         self.n_buses = len(self.bus_ts_source)
         self.n_agents = len(self.agent_ts_source)
@@ -324,22 +331,24 @@ class Concert:
     def init_agents(self):
         for agent_id in range(self.n_agents):
             ts_source = self.agent_ts_source[agent_id]
+            ts_target = self.agent_ts_target[agent_id]
             agent = Agent(self.env, self.queue_in,
-                          self.queue_out, agent_id, ts_source)
+                          self.queue_out, agent_id, ts_source, ts_target)
             self.agents.append(agent)
 
 
-concert = Concert(env, data)
-env.run(until=1500)
+concert = Festival(env, data)
+# env.run(until=3600)
+env.run(until = max(bus_ts_source)+2*3600)
 
 
 # %%
 agents = pd.DataFrame([agent.results() for agent in concert.agents])
-agents.to_csv('sketch/data/agents.csv', index=False, float_format='%.02f')
+agents.to_csv('agents.csv', index=False, float_format='%.02f')
 agents
 # %%
 buses = pd.DataFrame([bus.results() for bus in concert.buses])
-buses.to_csv('sketch/data/buses.csv', index=False, float_format='%.02f')
+buses.to_csv('buses.csv', index=False, float_format='%.02f')
 buses
 
 

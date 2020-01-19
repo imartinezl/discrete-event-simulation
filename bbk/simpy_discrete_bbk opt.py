@@ -66,7 +66,7 @@ def simulator(data, config):
             self.env.process(self.process())
 
         def bus_capacity(self):
-            
+            pass
 
         def process(self):
             yield self.env.timeout(self.ts_source)  # bus arrival frequency
@@ -383,7 +383,7 @@ pbounds = {
     'patience': (0,10),
     'get_on': (0,0),
     'get_off': (0,0),
-    'monitor_at': (10,10),
+    'monitor_at': (1,1),
     'bus_capacity': (4,40),
     'travel_time': (5,30),
 }
@@ -404,13 +404,13 @@ from bayes_opt.event import Events
 
 optimizer.maximize(
     init_points=10,
-    n_iter=100,
+    n_iter=20,
     alpha=1e-3,
 )
 
 # %% RESULTS
 
-concert = launch(9, 0, 0, 10, 14, 12)
+concert = launch(9, 0, 0, 1, 29, 24)
 agents = pd.DataFrame([agent.results() for agent in concert.agents])
 # agents.to_csv('agents.csv', index=False, float_format='%.02f')
 

@@ -38,31 +38,14 @@ df_agent.head()
 
 # %% SIMULATION
 
+def simulator(data, config):
+    assert type(config['PATIENCE']) == int
+    assert type(config['GET_ON']) == int
+    assert type(config['GET_OFF']) == int
+    assert type(config['MONITOR_AT']) == int
+    assert type(config['BUS_CAPACITY']) == int
+    assert type(config['TRAVEL_TIME']) == int
 
-
-def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
-    data = {
-        'bus_ts_source': bus_ts_source,
-        'agent_ts_source': df_agent.ts_source,
-        'agent_ts_target': df_agent.ts_target,
-    }
-    # bus_ts_source = [5, 10, 20, 30, 40, 50]
-    # agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    # agent_ts_target = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
-    # data = {
-    #     'bus_ts_source': bus_ts_source,
-    #     'agent_ts_source': agent_ts_source,
-    #     'agent_ts_target': agent_ts_target,
-    # }
-    config = {
-        'QUEUES' : 1,
-        'PATIENCE' : patience*60,
-        'GET_ON' : int(get_on),
-        'GET_OFF' : int(get_off),
-        'MONITOR_AT' : int(monitor_at),
-        'BUS_CAPACITY' : int(bus_capacity),
-        'TRAVEL_TIME' : travel_time*60
-    }
     env = simpy.Environment()
 
     class Bus():
@@ -81,6 +64,9 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
             #self.res = None  # init but resource
 
             self.env.process(self.process())
+
+        def bus_capacity(self):
+            
 
         def process(self):
             yield self.env.timeout(self.ts_source)  # bus arrival frequency
@@ -354,13 +340,36 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
     concert = Festival(env, data)
     # env.run(until=3600)
     env.run(until = max(bus_ts_source)+2*3600)
-    agents_data = pd.DataFrame([agent.results() for agent in concert.agents])
+    return concert
+
+def launch(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
+    data = {
+        'bus_ts_source': bus_ts_source,
+        'agent_ts_source': df_agent.ts_source,
+        'agent_ts_target': df_agent.ts_target,
+    }
+    config = {
+        'QUEUES' : 1,
+        'PATIENCE' : int(patience*60),
+        'GET_ON' : int(get_on),
+        'GET_OFF' : int(get_off),
+        'MONITOR_AT' : int(monitor_at),
+        'BUS_CAPACITY' : int(bus_capacity),
+        'TRAVEL_TIME' : int(travel_time*60)
+    }
+    return simulator(data, config)
+
+
+def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
+    concert = launch(patience, get_on, get_off, monitor_at, bus_capacity, travel_time)
+
+    agents = pd.DataFrame([agent.results() for agent in concert.agents])
     # buses = pd.DataFrame([bus.results() for bus in concert.buses])
 
-    agents_data['ts_expected'] = agents_data.ts_target - agents_data.ts_source
-    agents_data['ts_delta'] = agents_data.ts_expected - agents_data.ts_simulation
+    agents['ts_expected'] = agents.ts_target - agents.ts_source
+    agents['ts_delta'] = agents.ts_expected - agents.ts_simulation
 
-    rmse = np.sqrt(np.mean(agents_data.ts_delta**2))
+    rmse = np.sqrt(np.mean(agents.ts_delta**2))
     to_maximise = -rmse
     # print(to_maximise)
     return to_maximise
@@ -394,8 +403,74 @@ from bayes_opt.event import Events
 # optimizer.subscribe(Events.OPTMIZATION_STEP, logger)
 
 optimizer.maximize(
-    init_points=40,
+    init_points=10,
     n_iter=100,
+    alpha=1e-3,
 )
+
+# %% RESULTS
+
+concert = launch(9, 0, 0, 10, 14, 12)
+agents = pd.DataFrame([agent.results() for agent in concert.agents])
+# agents.to_csv('agents.csv', index=False, float_format='%.02f')
+
+buses = pd.DataFrame([bus.results() for bus in concert.buses])
+# buses.to_csv('buses.csv', index=False, float_format='%.02f')
+
+
+# %% BUSES ANALYSIS
+buses['ts_waiting'] = buses.ts_departed - buses.ts_source
+buses['ts_travel'] = buses.ts_reached - buses.ts_departed
+buses['ts_total'] = buses.ts_destination - buses.ts_source
+
+fig, ax = plt.subplots(3, 2, figsize=(12,12))
+plt.suptitle('Bus Stats')
+
+ax[0][0].set_title("bus_is_full histogram")
+ax[0][0].hist(buses.bus_is_full.astype(int), bins=2)
+ax[0][1].set_title("bus_is_full along ts_source")
+ax[0][1].plot(buses.ts_source, buses.bus_is_full)
+
+ax[1][0].set_title("driver_out_patience histogram")
+ax[1][0].hist(buses.driver_out_patience.astype(int), bins=2)
+ax[1][1].set_title("driver_out_patience along ts_source")
+ax[1][1].plot(buses.ts_source, buses.driver_out_patience)
+
+
+ax[2][0].set_title("ts_waiting histogram")
+ax[2][0].hist(buses.ts_waiting, bins=50)
+ax[2][1].set_title("ts_total histogram")
+ax[2][1].hist(buses.ts_total, bins=50)
+
+
+
+# %% AGENTS ANALYSIS
+agents['ts_expected'] = agents.ts_target - agents.ts_source
+agents['ts_delta'] = agents.ts_expected - agents.ts_simulation
+
+rmse = np.sqrt(np.mean(agents.ts_delta**2))
+
+fig, ax = plt.subplots(2, 2, figsize=(12,10))
+
+plt.suptitle('Agents Stats')
+
+ax[0][0].set_title("ts_target")
+ax[0][0].hist(agents.ts_source, bins=100, alpha=0.5, label="ts_source")
+ax[0][0].hist(agents.ts_target, bins=100, alpha=0.5, label="ts_target")
+ax[0][0].legend()
+
+ax[0][1].set_title("ts_destination")
+ax[0][1].hist(agents.ts_source, bins=100, alpha=0.5, label="ts_source")
+ax[0][1].hist(agents.ts_destination, bins=100, alpha=0.5, label="ts_destination")
+ax[0][1].legend()
+
+ax[1][0].set_title("ts_expected vs ts_simulation")
+ax[1][0].hist(agents.ts_expected, bins=100, alpha=0.5, label="ts_expected")
+ax[1][0].hist(agents.ts_simulation, bins=100, alpha=0.5, label="ts_simulation")
+ax[1][0].legend()
+
+ax[1][1].set_title("ts_delta rmse: " + str(int(rmse)))
+ax[1][1].hist(agents.ts_delta, bins=100, alpha=0.8, label="ts_delta")
+
 
 # %%

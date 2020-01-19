@@ -46,6 +46,14 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
         'agent_ts_source': df_agent.ts_source,
         'agent_ts_target': df_agent.ts_target,
     }
+    # bus_ts_source = [5, 10, 20, 30, 40, 50]
+    # agent_ts_source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    # agent_ts_target = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
+    # data = {
+    #     'bus_ts_source': bus_ts_source,
+    #     'agent_ts_source': agent_ts_source,
+    #     'agent_ts_target': agent_ts_target,
+    # }
     config = {
         'QUEUES' : 1,
         'PATIENCE' : patience*60,
@@ -56,7 +64,6 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
         'TRAVEL_TIME' : travel_time*60
     }
     env = simpy.Environment()
-    bus_available = env.event()
 
     class Bus():
         def __init__(self, env, bus_id, ts_source):
@@ -148,10 +155,12 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
             }
 
     class Agent:
-        def __init__(self, env, queue_in, queue_out, agent_id, ts_source, ts_target):
+        def __init__(self, env, festival, agent_id, ts_source, ts_target):
             self.env = env
-            self.queue_in = queue_in
-            self.queue_out = queue_out
+            self.festival = festival
+            self.queue_in = self.festival.queue_in
+            self.queue_out = self.festival.queue_out
+            self.bus_available = self.festival.bus_available
             self.agent_id = agent_id
             self.ts_source = ts_source
             self.ts_target = ts_target
@@ -159,6 +168,9 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
             self.print = False
             self.has_bus = False
             self.env.process(self.process())
+
+        def set_event(self, bus_available):
+            self.bus_available = bus_available
 
         def process(self):
             yield env.process(self.arrival())
@@ -176,18 +188,23 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
                     (self.agent_id, self.env.now))
 
         def queue_bus(self):
-            global bus_available
+            # global bus_available
+            # print(self.bus_available)
 
             queue_in_request = self.queue_in.request()  # request access to queue
             yield queue_in_request  # wait until turn to board a bus
-            yield bus_available  # wait until bus is available
+            yield self.bus_available  # wait until bus is available
             self.ts_bus_available = self.env.now
             yield self.env.timeout(config['GET_ON'])
             self.has_bus = True
             # print(self.agent_id)
-            self.bus = bus_available.value  # get one available bus
+            self.bus = self.bus_available.value  # get one available bus
+            # print(self.bus_available.value)
             self.queue_in.release(queue_in_request)  # release queue
-            bus_available = self.env.event()  # restart bus_available event
+
+            # restart bus_available event
+            self.festival.restart_event()
+
 
         def join_bus(self):
             self.bus_request = self.bus.res.request()
@@ -263,6 +280,8 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
             self.env = env
             self.queue_in = simpy.Resource(env, capacity=config['QUEUES'])
             self.queue_out = simpy.Resource(env, capacity=config['QUEUES'])
+            self.bus_available = env.event()
+
 
             # init process data
             self.bus_ts_source = data['bus_ts_source']
@@ -282,6 +301,7 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
             # monitor if the bus has reached and emptied
             self.env.process(self.monitor_bus_emptied())
 
+
             self.init_buses()
             self.init_agents()
 
@@ -290,9 +310,14 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
                 yield self.env.timeout(config['MONITOR_AT'])
                 available = any([bus.available() for bus in self.buses])
                 if available:
-                    if not bus_available.triggered:
+                    if not self.bus_available.triggered:
                         bus = self.select_bus()
-                        bus_available.succeed(value=bus)
+                        self.bus_available.succeed(value=bus)
+        
+        def restart_event(self):
+            self.bus_available = self.env.event()
+            for agent in self.agents:
+                agent.bus_available = self.bus_available
 
         def select_bus(self):
             # get first available bus seat
@@ -321,8 +346,9 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
             for agent_id in range(self.n_agents):
                 ts_source = self.agent_ts_source[agent_id]
                 ts_target = self.agent_ts_target[agent_id]
-                agent = Agent(self.env, self.queue_in,
-                            self.queue_out, agent_id, ts_source, ts_target)
+                # agent = Agent(self.env, self.queue_in, self.queue_out, self.bus_available, 
+                #             agent_id, ts_source, ts_target)
+                agent = Agent(self.env, self, agent_id, ts_source, ts_target)
                 self.agents.append(agent)
 
     concert = Festival(env, data)
@@ -336,20 +362,21 @@ def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
 
     rmse = np.sqrt(np.mean(agents_data.ts_delta**2))
     to_maximise = -rmse
-    print(to_maximise)
-    return agents_data
+    # print(to_maximise)
+    return to_maximise
 
 
 from bayes_opt import BayesianOptimization
 
-
+# a = objective(10/60, 0, 0, 1, 5, 25/60)
+# a = objective(10, 0, 0, 10, 5, 25)
 pbounds = {
-    'patience': (1,1),
+    'patience': (0,10),
     'get_on': (0,0),
     'get_off': (0,0),
     'monitor_at': (10,10),
-    'bus_capacity': (25,26),
-    'travel_time': (25,25),
+    'bus_capacity': (4,40),
+    'travel_time': (5,30),
 }
 
 optimizer = BayesianOptimization(
@@ -367,8 +394,8 @@ from bayes_opt.event import Events
 # optimizer.subscribe(Events.OPTMIZATION_STEP, logger)
 
 optimizer.maximize(
-    init_points=1,
-    n_iter=1,
+    init_points=40,
+    n_iter=100,
 )
 
 # %%

@@ -36,6 +36,10 @@ df_agent.ts_target = df_agent.ts_target-origin
 df_agent['ts_waiting'] = df_agent.ts_target-df_agent.ts_source
 df_agent.head()
 
+df_agent = df_agent[df_agent.ts_waiting < 4500].reset_index(drop=True)
+df_agent
+# df_agent.ts_waiting.hist(bins=100)
+
 # %% SIMULATION
 
 def simulator(data, config):
@@ -43,7 +47,7 @@ def simulator(data, config):
     assert type(config['GET_ON']) == int
     assert type(config['GET_OFF']) == int
     assert type(config['MONITOR_AT']) == int
-    assert type(config['BUS_CAPACITY']) == int
+    # assert type(config['BUS_CAPACITY']) == int
     assert type(config['TRAVEL_TIME']) == int
 
     env = simpy.Environment()
@@ -66,15 +70,23 @@ def simulator(data, config):
             self.env.process(self.process())
 
         def bus_capacity(self):
-            pass
+            from scipy import signal
+            x = self.env.now
+            xmean = config['BUS_CAPACITY_mean']
+            xstd = config['BUS_CAPACITY_std']
+            h = config['BUS_CAPACITY_height']
+            b = config['BUS_CAPACITY_min']
+            if abs(x-xmean) < xstd:
+                b += h*(1-abs(x-xmean)/xstd)
+            return b
 
         def process(self):
             yield self.env.timeout(self.ts_source)  # bus arrival frequency
             if self.print:
                 print('Bus %d arriving at %.2f' % (self.bus_id, self.env.now))
 
-            self.res = simpy.Resource(
-                self.env, capacity=config['BUS_CAPACITY'])  # create bus resource
+            b = config['BUS_CAPACITY']
+            self.res = simpy.Resource(self.env, capacity=b)  # create bus resource
             self.available_time = self.env.now  # save available time
 
             yield self.departed_event
@@ -176,7 +188,7 @@ def simulator(data, config):
         def queue_bus(self):
             # global bus_available
             # print(self.bus_available)
-
+            
             queue_in_request = self.queue_in.request()  # request access to queue
             yield queue_in_request  # wait until turn to board a bus
             yield self.bus_available  # wait until bus is available
@@ -185,7 +197,6 @@ def simulator(data, config):
             self.has_bus = True
             # print(self.agent_id)
             self.bus = self.bus_available.value  # get one available bus
-            # print(self.bus_available.value)
             self.queue_in.release(queue_in_request)  # release queue
 
             # restart bus_available event
@@ -342,7 +353,7 @@ def simulator(data, config):
     env.run(until = max(bus_ts_source)+2*3600)
     return concert
 
-def launch(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
+def launch(bus_capacity, get_off, get_on, monitor_at, patience, travel_time):
     data = {
         'bus_ts_source': bus_ts_source,
         'agent_ts_source': df_agent.ts_source,
@@ -355,13 +366,16 @@ def launch(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
         'GET_OFF' : int(get_off),
         'MONITOR_AT' : int(monitor_at),
         'BUS_CAPACITY' : int(bus_capacity),
+        # 'BUS_CAPACITY_min' : int(bus_capacity_min),
+        # 'BUS_CAPACITY_mean' : int(bus_capacity_mean),
+        # 'BUS_CAPACITY_std' : int(bus_capacity_std),
+        # 'BUS_CAPACITY_height' : int(bus_capacity_height),
         'TRAVEL_TIME' : int(travel_time*60)
     }
     return simulator(data, config)
 
-
-def objective(patience, get_on, get_off, monitor_at, bus_capacity, travel_time):
-    concert = launch(patience, get_on, get_off, monitor_at, bus_capacity, travel_time)
+def objective(bus_capacity, get_off, get_on, monitor_at, patience, travel_time):
+    concert = launch(patience, get_on, get_off, monitor_at, travel_time, bus_capacity)
 
     agents = pd.DataFrame([agent.results() for agent in concert.agents])
     # buses = pd.DataFrame([bus.results() for bus in concert.buses])
@@ -380,11 +394,15 @@ from bayes_opt import BayesianOptimization
 # a = objective(10/60, 0, 0, 1, 5, 25/60)
 # a = objective(10, 0, 0, 10, 5, 25)
 pbounds = {
-    'patience': (0,10),
+    'patience': (0,15),
     'get_on': (0,0),
     'get_off': (0,0),
     'monitor_at': (1,1),
     'bus_capacity': (4,40),
+    # 'bus_capacity_min': (4,40),
+    # 'bus_capacity_mean': (1000,30000),
+    # 'bus_capacity_std': (1000,10000),
+    # 'bus_capacity_height': (4,20),
     'travel_time': (5,30),
 }
 
@@ -404,13 +422,13 @@ from bayes_opt.event import Events
 
 optimizer.maximize(
     init_points=10,
-    n_iter=20,
-    alpha=1e-3,
+    n_iter=10,
+    alpha=1e-3
 )
 
 # %% RESULTS
 
-concert = launch(9, 0, 0, 1, 29, 24)
+concert = launch(19,0,0,30,1,6)
 agents = pd.DataFrame([agent.results() for agent in concert.agents])
 # agents.to_csv('agents.csv', index=False, float_format='%.02f')
 

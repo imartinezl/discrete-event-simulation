@@ -22,6 +22,7 @@ for index, data in df_bus.iterrows():
             bus_ts_source.append(int(ts_source*60))
 bus_ts_source = np.array(bus_ts_source)
 bus_ts_target = bus_ts_source + 25*60 # estimation
+nbus = len(bus_ts_source)
 
 ## Agent data
 def str2unix(x):
@@ -53,10 +54,8 @@ plt.axhline(bus_ts_target[100], lw=0.1, c='red')
 # %% DATA PROCESSING
 median = df_agent.ts_waiting.quantile(0.5)
 qlow = df_agent.ts_waiting.quantile(0.01)
-limit = median + (median-qlow) # limit
+limit = median + (median-qlow) # 4500
 df_agent = df_agent[df_agent.ts_waiting < limit].reset_index(drop=True)
-df_agent
-
 df_agent
 
 
@@ -71,22 +70,28 @@ y_pred = regr.predict(x)
 plt.plot(x,y_pred,c='red')
 plt.scatter(x,y,s=1,alpha=0.1)
 
-print(regr.coef_, regr.intercept_)
+print('ts_target=' + str(regr.coef_) + '*ts_source + ', str(regr.intercept_))
 
 # %%
 
+# bus_capacity_est = np.repeat(50, nbus)
 bus_capacity_est = pd.cut(df_agent.ts_source, bins=bus_ts_source, right=False).value_counts(sort=False).values
-bus_capacity_est
+bus_capacity_est = np.append(bus_capacity_est, 1)
+bus_capacity_est = np.clip(bus_capacity_est, 1, None)
 
 from scipy.signal import savgol_filter
-bus_capacity_est_smooth = savgol_filter(bus_capacity_est, 51, 3) # window size 51, polynomial order 3
-bus_capacity_est_smooth = np.clip(bus_capacity_est_smooth.astype(int), 1, None)
+bus_capacity_est_smooth = savgol_filter(bus_capacity_est, 51, 3).astype(int) # window size 51, polynomial order 3
+bus_capacity_est_smooth = np.clip(bus_capacity_est_smooth, 1, None)
+
+
+from scipy.signal import hilbert, chirp
+analytic_signal = hilbert(bus_capacity_est)
+amplitude_envelope = np.abs(analytic_signal)
 
 plt.plot(bus_capacity_est)
 plt.plot(bus_capacity_est_smooth, color='red')
+plt.plot(amplitude_envelope, color='green')
 plt.show()
-
-
 # %% SIMULATION
 
 def simulator(data, config):
@@ -117,16 +122,16 @@ def simulator(data, config):
 
             self.env.process(self.process())
 
-        def bus_capacity(self):
-            from scipy import signal
-            x = self.env.now
-            xmean = config['BUS_CAPACITY_mean']
-            xstd = config['BUS_CAPACITY_std']
-            h = config['BUS_CAPACITY_height']
-            b = config['BUS_CAPACITY_min']
-            if abs(x-xmean) < xstd:
-                b += h*(1-abs(x-xmean)/xstd)
-            return b
+        # def bus_capacity(self):
+        #     from scipy import signal
+        #     x = self.env.now
+        #     xmean = config['BUS_CAPACITY_mean']
+        #     xstd = config['BUS_CAPACITY_std']
+        #     h = config['BUS_CAPACITY_height']
+        #     b = config['BUS_CAPACITY_min']
+        #     if abs(x-xmean) < xstd:
+        #         b += h*(1-abs(x-xmean)/xstd)
+        #     return b
 
         def process(self):
             yield self.env.timeout(self.ts_source)  # bus arrival frequency
@@ -403,10 +408,10 @@ def simulator(data, config):
 
 def launch(get_off, get_on, monitor_at, patience, travel_time):
     data = {
-        'bus_ts_source': bus_ts_source[:-1],
+        'bus_ts_source': bus_ts_source,
         'agent_ts_source': df_agent.ts_source,
         'agent_ts_target': df_agent.ts_target,
-        'bus_capacity': bus_capacity_est_smooth
+        'bus_capacity': bus_capacity_est
     }
     config = {
         'QUEUES' : 1,
@@ -418,18 +423,56 @@ def launch(get_off, get_on, monitor_at, patience, travel_time):
     }
     return simulator(data, config), data, config
 
+# %% OPTIMIZATION
+def objective(get_off, get_on, monitor_at, patience, travel_time):
+    concert, data, config = launch(get_off, get_on, monitor_at, patience, travel_time)
 
+    agents = pd.DataFrame([agent.results() for agent in concert.agents])
+    # buses = pd.DataFrame([bus.results() for bus in concert.buses])
+
+    agents['ts_expected'] = agents.ts_target - agents.ts_source
+    agents['ts_delta'] = agents.ts_expected - agents.ts_simulation
+
+    rmse = np.sqrt(np.mean(agents.ts_delta**2))
+    to_maximise = -rmse
+    # print(to_maximise)
+    return to_maximise
+
+from bayes_opt import BayesianOptimization
+pbounds = {
+    'get_off': (0,0),
+    'get_on': (0,0),
+    'monitor_at': (10,10),
+    'patience': (0,60),
+    'travel_time': (5,60),
+}
+
+optimizer = BayesianOptimization(
+    f=objective,
+    pbounds=pbounds,
+    random_state=1,
+    verbose=2,
+)
+from bayes_opt.observer import JSONLogger
+from bayes_opt.event import Events
+# logger = JSONLogger(path="./logs.json")
+# optimizer.subscribe(Events.OPTMIZATION_STEP, logger)
+
+optimizer.maximize(
+    init_points=5,
+    n_iter=10,
+    alpha=1e-3
+)
 
 
 # %% RESULTS
-concert, data, config = launch(bus_capacity_est_smooth,0,0,10,10,30)
+concert, data, config = launch(0,0,10,32,5)
 
 agents = pd.DataFrame([agent.results() for agent in concert.agents])
 # agents.to_csv('agents.csv', index=False, float_format='%.02f')
 
 buses = pd.DataFrame([bus.results() for bus in concert.buses])
 # buses.to_csv('buses.csv', index=False, float_format='%.02f')
-
 
 # %% BUSES ANALYSIS
 buses['ts_waiting'] = buses.ts_departed - buses.ts_source

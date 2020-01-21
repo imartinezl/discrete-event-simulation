@@ -18,6 +18,7 @@ for index, data in df_bus.iterrows():
         buses = int(data.buses)
         for i in range(buses):
             ts_source = data.hora*60 + i*(60/buses) - 16*60
+            # ts_source = data.hora*60 - 16*60
             bus_ts_source.append(int(ts_source*60))
 
 ## Agent data
@@ -361,18 +362,18 @@ def launch(bus_capacity, get_off, get_on, monitor_at, patience, travel_time):
     }
     config = {
         'QUEUES' : 1,
-        'PATIENCE' : int(patience*60),
-        'GET_ON' : int(get_on),
-        'GET_OFF' : int(get_off),
-        'MONITOR_AT' : int(monitor_at),
-        'BUS_CAPACITY' : int(bus_capacity),
         # 'BUS_CAPACITY_min' : int(bus_capacity_min),
         # 'BUS_CAPACITY_mean' : int(bus_capacity_mean),
         # 'BUS_CAPACITY_std' : int(bus_capacity_std),
         # 'BUS_CAPACITY_height' : int(bus_capacity_height),
+        'BUS_CAPACITY' : int(bus_capacity),
+        'GET_ON' : int(get_on),
+        'GET_OFF' : int(get_off),
+        'MONITOR_AT' : int(monitor_at),
+        'PATIENCE' : int(patience*60),
         'TRAVEL_TIME' : int(travel_time*60)
     }
-    return simulator(data, config)
+    return simulator(data, config), data, config
 
 def objective(bus_capacity, get_off, get_on, monitor_at, patience, travel_time):
     concert = launch(patience, get_on, get_off, monitor_at, travel_time, bus_capacity)
@@ -394,16 +395,16 @@ from bayes_opt import BayesianOptimization
 # a = objective(10/60, 0, 0, 1, 5, 25/60)
 # a = objective(10, 0, 0, 10, 5, 25)
 pbounds = {
-    'patience': (0,15),
+    'patience': (0,60),
     'get_on': (0,0),
     'get_off': (0,0),
-    'monitor_at': (1,1),
-    'bus_capacity': (4,40),
+    'monitor_at': (10,10),
+    'bus_capacity': (4,50),
     # 'bus_capacity_min': (4,40),
     # 'bus_capacity_mean': (1000,30000),
     # 'bus_capacity_std': (1000,10000),
     # 'bus_capacity_height': (4,20),
-    'travel_time': (5,30),
+    'travel_time': (5,60),
 }
 
 optimizer = BayesianOptimization(
@@ -414,7 +415,7 @@ optimizer = BayesianOptimization(
 )
 
 
-# %%
+# %% OPTIMIZATION
 from bayes_opt.observer import JSONLogger
 from bayes_opt.event import Events
 # logger = JSONLogger(path="./logs.json")
@@ -428,7 +429,8 @@ optimizer.maximize(
 
 # %% RESULTS
 
-concert = launch(19,0,0,30,1,6)
+# bus_capacity, get_off, get_on, monitor_at, patience, travel_time
+concert, data, config = launch(8,0,0,10,24,30)
 agents = pd.DataFrame([agent.results() for agent in concert.agents])
 # agents.to_csv('agents.csv', index=False, float_format='%.02f')
 
@@ -442,7 +444,7 @@ buses['ts_travel'] = buses.ts_reached - buses.ts_departed
 buses['ts_total'] = buses.ts_destination - buses.ts_source
 
 fig, ax = plt.subplots(3, 2, figsize=(12,12))
-plt.suptitle('Bus Stats')
+plt.suptitle('Bus Stats \n Config: ' + str(config))
 
 ax[0][0].set_title("bus_is_full histogram")
 ax[0][0].hist(buses.bus_is_full.astype(int), bins=2)
@@ -470,7 +472,7 @@ rmse = np.sqrt(np.mean(agents.ts_delta**2))
 
 fig, ax = plt.subplots(2, 2, figsize=(12,10))
 
-plt.suptitle('Agents Stats')
+plt.suptitle('Agents Stats \n Config: ' + str(config))
 
 ax[0][0].set_title("ts_target")
 ax[0][0].hist(agents.ts_source, bins=100, alpha=0.5, label="ts_source")
